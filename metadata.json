@@ -1,0 +1,6 @@
+{
+  "name": "Personal Assistant Workbench",
+  "description": "A personal assistant workbench for managing trivial tasks in the development process: project deployment, project startup, workbench cleanup, daily work summary, and to-do task management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
