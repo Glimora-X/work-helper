@@ -153,6 +153,7 @@ function getConfiguredT1Command(): string {
       quoteShellArg(AUTOMATION_T1_CLI_CWD),
       '--env',
       quoteShellArg(AUTOMATION_T1_ENV),
+      '--non-interactive',
     ];
 
     if (AUTOMATION_T1_EXTRA_ARGS.trim()) {
@@ -211,7 +212,10 @@ function runShellStep(run: AutomationRun, step: string, cwd: string, command: st
     const child = spawn(command, {
       cwd,
       shell: true,
-      env: process.env,
+      env: {
+        ...process.env,
+        CI: process.env.CI || 'true',
+      },
     });
 
     const hardErrorPattern = /(error|exception|failed|cannot|not found|eacces|enoent)/i;

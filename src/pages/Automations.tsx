@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bot, Clock, Play, MoreVertical, FileText, CheckSquare, GitBranch, Plus, Search, ToggleRight, ToggleLeft, X, Sparkles, Zap } from 'lucide-react';
 
 interface AutomationTask {
@@ -25,13 +25,35 @@ async function run() {
 }`,
 };
 
-const getWorkflowScript = (task: AutomationTask) => {
-  return workflowScripts[task.id] ?? `// ${task.name} 运行定义
+const AUTOMATION_EDITS_KEY = 'assistant-automation-task-edits';
+
+type TaskEdits = Record<string, { schedule: string; script: string }>;
+
+function loadTaskEdits(): TaskEdits {
+  try {
+    const raw = localStorage.getItem(AUTOMATION_EDITS_KEY);
+    if (raw) return JSON.parse(raw) as TaskEdits;
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+const defaultWorkflowScript = (task: AutomationTask) =>
+  `// ${task.name} 运行定义
 async function run() {
   console.log("Mock building workflow...");
   // TODO: Add implementation via prompt
 }`;
+
+const getWorkflowScript = (task: AutomationTask, edits: TaskEdits) => {
+  const saved = edits[task.id]?.script;
+  if (saved !== undefined && saved.trim().length > 0) return saved;
+  return workflowScripts[task.id] ?? defaultWorkflowScript(task);
 };
+
+const displaySchedule = (task: AutomationTask, edits: TaskEdits) =>
+  edits[task.id]?.schedule ?? task.schedule;
 
 const DEPLOY_API_BASE =
   (import.meta.env.VITE_DEPLOY_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/deploy';
@@ -86,8 +108,26 @@ export default function Automations() {
   const [tasks, setTasks] = useState<AutomationTask[]>(initialTasks);
   const [search, setSearch] = useState('');
   
+  const [taskEdits, setTaskEdits] = useState<TaskEdits>(loadTaskEdits);
+  const [draftSchedule, setDraftSchedule] = useState('');
+  const [draftScript, setDraftScript] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AUTOMATION_EDITS_KEY, JSON.stringify(taskEdits));
+    } catch {
+      /* ignore */
+    }
+  }, [taskEdits]);
+
   // Modal states
   const [editingTask, setEditingTask] = useState<AutomationTask | null>(null);
+
+  const openWorkflowEditor = (task: AutomationTask) => {
+    setDraftSchedule(displaySchedule(task, taskEdits));
+    setDraftScript(getWorkflowScript(task, taskEdits));
+    setEditingTask(task);
+  };
   const [isCreating, setIsCreating] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
@@ -100,6 +140,15 @@ export default function Automations() {
 
   const toggleTask = (id: string) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, active: !t.active } : t));
+  };
+
+  const handleSaveWorkflowConfig = () => {
+    if (!editingTask) return;
+    setTaskEdits((prev) => ({
+      ...prev,
+      [editingTask.id]: { schedule: draftSchedule, script: draftScript },
+    }));
+    setEditingTask(null);
   };
 
   const getIcon = (type: AutomationTask['type']) => {
@@ -252,7 +301,7 @@ export default function Automations() {
           <div className="flex items-center gap-2 ml-auto text-sm text-gray-500">
             <div className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block shadow-sm ring-2 ring-white"></span> {tasks.filter(t => t.active).length} 个运行中</div>
             <div className="w-px h-3 bg-gray-300 mx-2"></div>
-            <span className="text-gray-400 text-xs">计划明细正在架构阶段</span>
+            <span className="text-gray-400 text-xs">细则已保存至本机浏览器</span>
           </div>
         </div>
 
@@ -298,11 +347,11 @@ export default function Automations() {
 
                 <div className="pt-4 border-t border-gray-100 shrink-0">
                   <div className="flex items-center justify-between text-[11px] font-mono text-gray-500 mb-2">
-                    <span className="flex items-center gap-1.5 whitespace-nowrap"><Clock className="w-3.5 h-3.5" /> {task.schedule}</span>
+                    <span className="flex items-center gap-1.5 whitespace-nowrap"><Clock className="w-3.5 h-3.5" /> {displaySchedule(task, taskEdits)}</span>
                   </div>
                   <div className="flex items-center justify-between mt-3">
                     <button 
-                      onClick={() => setEditingTask(task)}
+                      onClick={() => openWorkflowEditor(task)}
                       className={`flex items-center text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors ${task.active ? 'text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200' : 'text-gray-400 bg-gray-50/50'}`}
                     >
                       配置工作流细则
@@ -364,18 +413,23 @@ export default function Automations() {
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">执行频率 (Cron)</label>
-                  <input type="text" defaultValue={editingTask.schedule} className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100" />
+                  <input
+                    type="text"
+                    value={draftSchedule}
+                    onChange={(e) => setDraftSchedule(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">执行节点脚本</label>
-                  <div className="border border-gray-200 rounded-lg bg-[#1e1e1e] p-4 text-sm font-mono text-gray-300">
-                    <pre>
-                      <code>
-                        {getWorkflowScript(editingTask)}
-                      </code>
-                    </pre>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">使用可视化编排或者直接修改触发代码。</p>
+                  <textarea
+                    value={draftScript}
+                    onChange={(e) => setDraftScript(e.target.value)}
+                    spellCheck={false}
+                    rows={14}
+                    className="w-full border border-gray-200 rounded-lg bg-[#1e1e1e] p-4 text-sm font-mono text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-900/40 resize-y min-h-[200px]"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">保存后写入本机；实际定时仍以服务端 / 环境变量为准。</p>
                 </div>
               </div>
             </div>
@@ -384,7 +438,10 @@ export default function Automations() {
               <button onClick={() => setEditingTask(null)} className="px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200/50 rounded-lg transition-colors">
                 取消
               </button>
-              <button onClick={() => setEditingTask(null)} className="px-5 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-sm">
+              <button
+                onClick={handleSaveWorkflowConfig}
+                className="px-5 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors shadow-sm"
+              >
                 保存配置
               </button>
             </div>
