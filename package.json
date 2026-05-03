@@ -11,6 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
+    "test": "node --import tsx --test test/server/*.test.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

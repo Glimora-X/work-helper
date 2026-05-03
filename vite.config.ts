@@ -24,6 +24,10 @@ export default defineConfig(({mode}) => {
           target: `http://127.0.0.1:${env.DEPLOY_API_PORT || '8787'}`,
           changeOrigin: true,
         },
+        '/api/startup': {
+          target: `http://127.0.0.1:${env.DEPLOY_API_PORT || '8787'}`,
+          changeOrigin: true,
+        },
       },
     },
   };

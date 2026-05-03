@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type MouseEvent } from 'react';
-import { Terminal, Settings, Play, Folder, FolderTree, GitBranch, TerminalSquare, Layers, Command as CmdIcon, CheckCircle2, Plus, Edit2, Trash2, X, Save, Loader2 } from 'lucide-react';
+import { Terminal, Settings, Play, Square, Folder, FolderTree, GitBranch, TerminalSquare, Layers, Command as CmdIcon, CheckCircle2, Plus, Edit2, Trash2, X, Save, Loader2 } from 'lucide-react';
 
 type IDEType = 'cursor' | 'code' | 'webstorm';
 type CmdType = 'yarn dev' | 'yarn w' | 'yarn --force' | 'none' | string;
@@ -22,6 +22,20 @@ interface StartupProfile {
   projects: SubProject[];
 }
 
+type ProfileRunStatus = 'bootstrapping' | 'running' | 'completed' | 'failed' | 'stopped';
+
+interface StartupLog {
+  id: number;
+  text: string;
+  type: string;
+}
+
+interface ProfileRunState {
+  runId?: string;
+  status: ProfileRunStatus;
+  logs: StartupLog[];
+}
+
 const INITIAL_PROFILES: StartupProfile[] = [
   {
     id: 'p1',
@@ -30,7 +44,7 @@ const INITIAL_PROFILES: StartupProfile[] = [
     type: 'single',
     ide: 'cursor',
     projects: [
-      { id: '1', name: 'cc-web', path: '~/projects/cc-web', branch: 'feat/JIRA-1001', installCmd: 'yarn --force', runCmd: 'yarn dev' }
+      { id: '1', name: 'cc-web', path: '~/Documents/work-space/web/saas-cc-web', branch: 'sprint-260423', installCmd: 'yarn', runCmd: 'yarn dev' }
     ]
   },
   {
@@ -61,61 +75,132 @@ const INITIAL_PROFILES: StartupProfile[] = [
 export default function Startup() {
   const [profiles, setProfiles] = useState<StartupProfile[]>(INITIAL_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState<string>(INITIAL_PROFILES[0].id);
-  const [isRunning, setIsRunning] = useState(false);
-  const [logs, setLogs] = useState<{ id: number, text: string, type: string }[]>([]);
+  const [runsByProfileId, setRunsByProfileId] = useState<Record<string, ProfileRunState>>({});
   const logsRef = useRef<HTMLDivElement>(null);
+  const esRefs = useRef<Record<string, EventSource>>({});
 
   // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<StartupProfile | null>(null);
 
   const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
+  const activeRun = runsByProfileId[activeProfileId];
+  const logs = activeRun?.logs || [];
+  const isCurrentBootstrapping = activeRun?.status === 'bootstrapping';
+  const isCurrentRunning = activeRun?.status === 'bootstrapping' || activeRun?.status === 'running';
 
   useEffect(() => {
     logsRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const addLog = (text: string, type = 'info') => {
-    setLogs(prev => [...prev, { id: Math.random(), text, type }]);
+  useEffect(() => {
+    return () => {
+      for (const profileId of Object.keys(esRefs.current)) {
+        esRefs.current[profileId].close();
+      }
+    };
+  }, []);
+
+  const addLog = (profileId: string, text: string, type = 'info') => {
+    setRunsByProfileId(prev => {
+      const current = prev[profileId] || { status: 'completed', logs: [] };
+      return {
+        ...prev,
+        [profileId]: {
+          ...current,
+          logs: [...current.logs, { id: Math.random(), text, type }],
+        },
+      };
+    });
+  };
+
+  const updateRunState = (profileId: string, patch: Partial<ProfileRunState>) => {
+    setRunsByProfileId(prev => {
+      const current = prev[profileId] || { status: 'completed', logs: [] };
+      return {
+        ...prev,
+        [profileId]: { ...current, ...patch },
+      };
+    });
   };
 
   const handleLaunch = async () => {
-    setIsRunning(true);
-    setLogs([]);
-    addLog(`[System] Connect to local daemon (localhost:10086)...`, 'system');
-    await new Promise(r => setTimeout(r, 600));
+    if (!activeProfile) return;
 
-    addLog(`[Daemon] Launching IDE: ${activeProfile.ide} ...`, 'info');
-    for (const proj of activeProfile.projects) {
-      addLog(`> $ ${activeProfile.ide} ${proj.path}`, 'cmd');
-    }
-    await new Promise(r => setTimeout(r, 800));
+    const profile = activeProfile;
+    esRefs.current[profile.id]?.close();
+    updateRunState(profile.id, { status: 'bootstrapping', runId: undefined, logs: [] });
 
-    addLog(`[Git] Syncing repositories...`, 'info');
-    for (const proj of activeProfile.projects) {
-      addLog(`[${proj.name}] git fetch origin`, 'cmd');
-      await new Promise(r => setTimeout(r, 300));
-      addLog(`[${proj.name}] git checkout ${proj.branch}`, 'cmd');
-      await new Promise(r => setTimeout(r, 300));
-      addLog(`[${proj.name}] Branch synchronized.`, 'success');
-    }
+    try {
+      const res = await fetch('/api/startup/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ide: profile.ide,
+          projects: profile.projects,
+          options: { smartInstall: true, openDevInTerminal: false },
+        }),
+      });
 
-    addLog(`[Yarn] Installing dependencies...`, 'info');
-    for (const proj of activeProfile.projects) {
-      addLog(`[${proj.name}] Executing: ${proj.installCmd}`, 'cmd');
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    addLog(`[Runner] Spawning background processes...`, 'info');
-    for (const proj of activeProfile.projects) {
-      if (proj.runCmd !== 'none' && proj.runCmd.trim() !== '') {
-        addLog(`[${proj.name}] Spawning shell: ${proj.runCmd}`, 'cmd');
-        await new Promise(r => setTimeout(r, 300));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        addLog(profile.id, `[Error] ${(err as { error?: string }).error || '启动请求失败'}`, 'error');
+        updateRunState(profile.id, { status: 'failed' });
+        return;
       }
-    }
 
-    addLog(`🎉 Workspace completely initialized and running!`, 'success');
-    setIsRunning(false);
+      const { runId } = await res.json() as { runId: string };
+      const es = new EventSource(`/api/startup/runs/${runId}/events`);
+      esRefs.current[profile.id] = es;
+      updateRunState(profile.id, { runId });
+
+      es.onmessage = (e) => {
+        const event = JSON.parse(e.data) as { type: string; payload: Record<string, string> };
+        if (event.type === 'log') {
+          addLog(profile.id, event.payload.message as string, (event.payload.level as string) || 'info');
+        } else if (event.type === 'bootstrap_ready') {
+          updateRunState(profile.id, { status: 'running' });
+        } else if (event.type === 'completed') {
+          updateRunState(profile.id, { status: 'completed' });
+          es.close();
+          delete esRefs.current[profile.id];
+        } else if (event.type === 'stopped') {
+          updateRunState(profile.id, { status: 'stopped' });
+          es.close();
+          delete esRefs.current[profile.id];
+        } else if (event.type === 'failed') {
+          const err = (event.payload as { error?: string }).error;
+          if (err) addLog(profile.id, `[Error] ${err}`, 'error');
+          updateRunState(profile.id, { status: 'failed' });
+          es.close();
+          delete esRefs.current[profile.id];
+        }
+      };
+
+      es.onerror = () => {
+        addLog(profile.id, '[Error] 与后端连接中断', 'error');
+        updateRunState(profile.id, { status: 'failed' });
+        es.close();
+        delete esRefs.current[profile.id];
+      };
+    } catch {
+      addLog(profile.id, '[Error] 网络请求失败，请确认后端服务正在运行', 'error');
+      updateRunState(profile.id, { status: 'failed' });
+    }
+  };
+
+  const handleStopCurrentRun = async () => {
+    if (!activeRun?.runId || !activeProfile) return;
+    addLog(activeProfile.id, `[Runner] 正在停止当前配置任务...`, 'warn');
+    try {
+      const res = await fetch(`/api/startup/runs/${activeRun.runId}/stop`, { method: 'POST' });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || '停止请求失败');
+      updateRunState(activeProfile.id, { status: 'stopped' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addLog(activeProfile.id, `[Error] 停止失败：${message}`, 'error');
+    }
   };
 
   const handleCreateNew = () => {
@@ -152,6 +237,8 @@ export default function Startup() {
 
   const handleDeleteProfile = (id: string, e: MouseEvent) => {
     e.stopPropagation();
+    const runStatus = runsByProfileId[id]?.status;
+    if (runStatus === 'bootstrapping' || runStatus === 'running') return;
     const nextList = profiles.filter(p => p.id !== id);
     setProfiles(nextList);
     if (activeProfileId === id && nextList.length > 0) {
@@ -203,22 +290,26 @@ export default function Startup() {
                ) : profiles.map(profile => (
                  <div
                    key={profile.id}
-                   onClick={() => !isRunning && !isEditing && setActiveProfileId(profile.id)}
+                   onClick={() => !isEditing && setActiveProfileId(profile.id)}
                    className={`text-left p-4 rounded-xl border transition-all cursor-pointer relative group shrink-0 ${
                      activeProfileId === profile.id 
                        ? 'bg-white border-blue-400 ring-4 ring-blue-50 shadow-sm' 
                        : 'bg-white border-gray-200 hover:border-gray-300 opacity-80'
-                   } ${(isRunning || isEditing) ? 'pointer-events-none opacity-50' : ''}`}
+                   } ${isEditing ? 'pointer-events-none opacity-50' : ''}`}
                  >
                    <div className="flex justify-between items-start mb-2">
                      <div className="flex items-center gap-2">
                        {profile.type === 'single' ? <Folder className="w-4 h-4 text-blue-500" /> : <FolderTree className="w-4 h-4 text-purple-500" />}
                        <span className="font-semibold text-sm text-gray-900">{profile.title}</span>
+                       {(runsByProfileId[profile.id]?.status === 'bootstrapping' || runsByProfileId[profile.id]?.status === 'running') && (
+                         <span className="h-2 w-2 rounded-full bg-green-500" title="运行中" />
+                       )}
                      </div>
                      <button 
                        onClick={(e) => handleDeleteProfile(profile.id, e)}
-                       className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                       title="删除配置"
+                       disabled={runsByProfileId[profile.id]?.status === 'bootstrapping' || runsByProfileId[profile.id]?.status === 'running'}
+                       className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed disabled:hover:text-gray-300"
+                       title={(runsByProfileId[profile.id]?.status === 'bootstrapping' || runsByProfileId[profile.id]?.status === 'running') ? '运行中，先停止工程' : '删除配置'}
                      >
                        <Trash2 className="w-3.5 h-3.5" />
                      </button>
@@ -234,7 +325,7 @@ export default function Startup() {
 
                <button 
                  onClick={handleCreateNew}
-                 disabled={isRunning || isEditing}
+                 disabled={isEditing}
                  className="mt-1 shrink-0 border border-dashed border-gray-300 rounded-xl p-3 text-center text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-50"
                >
                  + 添加新配置
@@ -329,7 +420,7 @@ export default function Startup() {
                   <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <CmdIcon className="w-4 h-4 text-gray-400" /> 
                     执行计划预览 
-                    <button onClick={handleEdit} disabled={isRunning || !activeProfile} className="text-gray-400 hover:text-blue-500 transition-colors ml-2"><Edit2 className="w-3.5 h-3.5"/></button>
+                    <button onClick={handleEdit} disabled={isCurrentRunning || !activeProfile} className="text-gray-400 hover:text-blue-500 transition-colors ml-2 disabled:opacity-40"><Edit2 className="w-3.5 h-3.5"/></button>
                   </h3>
                   
                   {activeProfile && (
@@ -358,14 +449,22 @@ export default function Startup() {
                   ))}
                 </div>
 
-                <div className="pt-2 z-10">
+                <div className="pt-2 z-10 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button 
                     onClick={handleLaunch}
-                    disabled={isRunning || !activeProfile}
+                    disabled={isCurrentRunning || !activeProfile}
                     className="w-full bg-gray-900 text-white rounded-lg py-3 text-sm font-medium hover:bg-black flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
                   >
-                    {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" fill="currentColor" />}
-                    {isRunning ? '环境构建与依赖挂载中...' : '一键启动本地环境'}
+                    {isCurrentBootstrapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" fill="currentColor" />}
+                    {isCurrentBootstrapping ? '环境构建与依赖挂载中...' : isCurrentRunning ? '当前配置运行中' : '一键启动本地环境'}
+                  </button>
+                  <button
+                    onClick={handleStopCurrentRun}
+                    disabled={!isCurrentRunning || !activeRun?.runId}
+                    className="w-full border border-red-200 text-red-600 bg-white rounded-lg py-3 text-sm font-medium hover:bg-red-50 flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-40 disabled:hover:bg-white"
+                  >
+                    <Square className="w-4 h-4" fill="currentColor" />
+                    停止当前工程
                   </button>
                 </div>
               </div>
@@ -380,7 +479,7 @@ export default function Startup() {
                   <div className="w-2.5 h-2.5 rounded-full bg-[#27C93F]" />
                 </div>
                 <div className="flex items-center gap-2">
-                  {!isRunning && logs.length > 0 && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                  {!isCurrentBootstrapping && logs.length > 0 && <CheckCircle2 className="w-3 h-3 text-green-500" />}
                   <p className="text-[10px] font-mono text-gray-500">Local Daemon Proxy [tty1]</p>
                 </div>
               </div>
@@ -396,6 +495,8 @@ export default function Startup() {
                           log.type === 'system' ? 'text-purple-400 font-bold' :
                           log.type === 'cmd' ? 'text-gray-400' :
                           log.type === 'success' ? 'text-green-400' :
+                          log.type === 'error' ? 'text-red-400' :
+                          log.type === 'warn' ? 'text-amber-400' :
                           'text-gray-300'
                         }`}>
                           {log.text}

@@ -11,6 +11,13 @@ export interface JenkinsTriggerResult {
   error?: string;
 }
 
+export interface JenkinsBuildResult {
+  building: boolean;
+  result: 'SUCCESS' | 'FAILURE' | 'ABORTED' | 'UNSTABLE' | null;
+  duration: number;
+  error?: string;
+}
+
 function buildJobBaseUrl(jenkinsBase: string, jobSegments: string[]): string {
   const base = jenkinsBase.replace(/\/$/, '');
   const encoded = jobSegments.map((s) => encodeURIComponent(s)).join('/job/');
@@ -54,9 +61,29 @@ async function pollQueueUntilBuild(
     if (json.executable?.number != null && json.executable.url) {
       return { buildNumber: json.executable.number, buildUrl: json.executable.url };
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    const remainingMs = timeoutMs - (Date.now() - start);
+    if (remainingMs <= 0) break;
+    await new Promise((r) => setTimeout(r, Math.min(1000, remainingMs)));
   }
   return null;
+}
+
+function sanitizeJenkinsError(status: number, contentType: string | null, body: string): string {
+  const looksHtml =
+    contentType?.toLowerCase().includes('text/html') ||
+    /<\/?(html|body|form|script|title|input|div)\b/i.test(body);
+
+  if (looksHtml) {
+    return `Jenkins HTTP ${status}: authentication or permission failed. Check Jenkins credentials, crumb access, and job build permission.`;
+  }
+
+  const compact = body
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `Jenkins HTTP ${status}${compact ? `: ${compact.slice(0, 200)}` : ''}`;
 }
 
 export async function triggerJenkinsJob(options: {
@@ -87,7 +114,7 @@ export async function triggerJenkinsJob(options: {
     const text = await resp.text().catch(() => '');
     return {
       simulated: false,
-      error: `Jenkins HTTP ${resp.status}${text ? `: ${text.slice(0, 200)}` : ''}`,
+      error: sanitizeJenkinsError(resp.status, resp.headers.get('content-type'), text),
     };
   }
 
@@ -111,5 +138,53 @@ export async function triggerJenkinsJob(options: {
     buildUrl,
     buildNumber,
     message: buildNumber != null ? `Build #${buildNumber} started.` : 'Job queued.',
+  };
+}
+
+/**
+ * Poll a Jenkins build URL until building=false (i.e. the build has completed).
+ * Returns the final result (SUCCESS / FAILURE / ABORTED / UNSTABLE) or null if timed out.
+ */
+export async function pollBuildUntilComplete(
+  buildUrl: string,
+  authHeader: string,
+  timeoutMs: number = 1800000, // 30 min default
+  intervalMs: number = 5000
+): Promise<JenkinsBuildResult> {
+  const api = buildUrl.endsWith('/') ? `${buildUrl}api/json` : `${buildUrl}/api/json`;
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const resp = await fetch(api, { headers: { Authorization: authHeader } });
+      if (!resp.ok) {
+        await new Promise((r) => setTimeout(r, intervalMs));
+        continue;
+      }
+      const json = (await resp.json()) as {
+        building?: boolean;
+        result?: string | null;
+        duration?: number;
+      };
+      if (json.building === false) {
+        return {
+          building: false,
+          result: (json.result as JenkinsBuildResult['result']) ?? null,
+          duration: json.duration ?? 0,
+        };
+      }
+    } catch {
+      // network blip – keep retrying
+    }
+    const remaining = timeoutMs - (Date.now() - start);
+    if (remaining <= 0) break;
+    await new Promise((r) => setTimeout(r, Math.min(intervalMs, remaining)));
+  }
+
+  return {
+    building: true,
+    result: null,
+    duration: 0,
+    error: `Build did not complete within ${Math.round(timeoutMs / 1000)}s timeout`,
   };
 }

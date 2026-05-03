@@ -1,7 +1,58 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+/* 霞鹜文楷 Screen 版（正文主字体）*/
+@import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css');
+/* Noto Sans SC（标题/加粗兜底）+ Inter（英文数字）+ JetBrains Mono（代码）*/
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "LXGW WenKai Screen", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* ─── Wcowin CSS Variables ─────────────────────────────── */
+:root {
+  --bg-primary:       #ffffff;
+  --bg-secondary:     #f8f9fa;
+  --bg-sidebar:       #2d3142;
+  --bg-card:          #ffffff;
+  --bg-hover:         #f0f4ff;
+  --accent-primary:   #4A90D9;
+  --accent-secondary: #00BCD4;
+  --accent-light:     #e8f4fd;
+  --accent-gradient:  linear-gradient(135deg, #667eea 0%, #4A90D9 100%);
+  --text-primary:     #2c3e50;
+  --text-secondary:   #5a6a7a;
+  --text-muted:       #8e99a8;
+  --text-sidebar:     #c8d0e0;
+  --border-light:     #e8ecf0;
+  --border-medium:    #c5d0dc;
+  --tag-bg:           #eef2ff;
+  --tag-text:         #4A5568;
+  --shadow-card:      0 2px 12px rgba(74, 144, 217, 0.08);
+  --shadow-hover:     0 6px 24px rgba(74, 144, 217, 0.16);
+}
+
+/* ─── Base Typography ──────────────────────────────────── */
+body {
+  font-family: "LXGW WenKai Screen", "Noto Sans SC", sans-serif;
+  line-height: 1.85;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+h1, h2, h3, h4 {
+  font-family: "Noto Sans SC", sans-serif;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+}
+
+strong, b {
+  font-family: "Noto Sans SC", sans-serif;
+  font-weight: 700;
+}
+
+code, pre, .font-mono {
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: 0;
 }

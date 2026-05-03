@@ -43,30 +43,68 @@ export default function Dashboard() {
   return (
     <div className="p-8 md:p-12 max-w-5xl mx-auto">
       <header className="mb-10">
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">控制台</h1>
-        <p className="text-sm text-gray-500 mt-1">管理开发流水线与日常任务。</p>
+        <h1
+          className="text-2xl font-semibold tracking-tight"
+          style={{ fontFamily: '"Noto Serif SC", serif', color: 'var(--text-primary)' }}
+        >
+          控制台
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+          管理开发流水线与日常任务。
+        </p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {actions.map((action) => (
-          <Link 
+          <Link
             key={action.title}
             to={action.path}
-            className="group relative flex flex-col p-5 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-200"
+            className="group relative flex flex-col p-5 rounded-xl transition-all duration-200 no-underline"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-light)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.boxShadow = 'var(--shadow-hover)';
+              el.style.transform = 'translateY(-3px)';
+              el.style.borderColor = 'var(--border-medium)';
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.boxShadow = 'var(--shadow-card)';
+              el.style.transform = 'translateY(0)';
+              el.style.borderColor = 'var(--border-light)';
+            }}
           >
-            <div className="flex justify-between items-start mb-6">
-              <div className="w-8 h-8 rounded-md bg-gray-50 border border-gray-100 flex items-center justify-center">
-                <action.icon className="w-4 h-4 text-gray-700 stroke-[2px]" />
+            <div className="flex justify-between items-start mb-5">
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center"
+                style={{ background: 'var(--accent-light)', border: '1px solid rgba(74,144,217,0.2)' }}
+              >
+                <action.icon className="w-4 h-4 stroke-[2px]" style={{ color: 'var(--accent-primary)' }} />
               </div>
-              <ArrowRight className="w-4 h-4 text-gray-300 transition-transform group-hover:translate-x-1 group-hover:text-gray-900" />
+              <ArrowRight
+                className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1"
+                style={{ color: 'var(--border-medium)' }}
+              />
             </div>
-            
+
             <div>
-              <h2 className="text-sm font-medium text-gray-900 flex items-baseline gap-2">
+              <h2
+                className="text-sm font-semibold flex items-baseline gap-2"
+                style={{ color: 'var(--text-primary)', fontFamily: '"Noto Sans SC", sans-serif' }}
+              >
                 {action.title}
-                <span className="text-[10px] uppercase text-gray-400 font-mono tracking-wider">{action.subtitle}</span>
+                <span
+                  className="text-[10px] uppercase font-mono tracking-wider"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {action.subtitle}
+                </span>
               </h2>
-              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+              <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                 {action.description}
               </p>
             </div>

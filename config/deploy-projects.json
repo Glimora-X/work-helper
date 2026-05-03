@@ -1,0 +1,72 @@
+{
+  "defaults": {
+    "branch": "pretest",
+    "jenkinsBaseUrl": "https://jenkins.rd.chanjet.com",
+    "jiraParamName": "JIRA_ID",
+    "branchParamName": "BRANCH_NAME"
+  },
+  "projects": {
+    "saas-cc-web": {
+      "label": "saas-cc-web",
+      "jobPath": "BUILD-to-HSY_PRETEST__saas-cc-web",
+      "defaultBranch": "test"
+    },
+    "saas-cc-node": {
+      "label": "saas-cc-node",
+      "jobPath": "BUILD-to-HSY_PRETEST__saas-cc-node",
+      "defaultBranch": "test"
+    },
+    "biz-core": {
+      "label": "biz-core",
+      "jobPath": "BUILD-to-CNPM__cc_web_cc-front-biz-core",
+      "defaultBranch": "test"
+    },
+    "saas-cc-web-scm": {
+      "label": "saas-cc-web-scm",
+      "jobPath": "BUILD-to-HSY_PRETEST__saas-cc-web-scm",
+      "defaultBranch": "test"
+    },
+    "biz-app-service": {
+      "label": "biz-app-service",
+      "jobPath": "BUILD-to-HSY_PRETEST__cc-front-biz-app-service",
+      "defaultBranch": "test"
+    },
+    "hsy-h5-voucher": {
+      "label": "hsy-h5-voucher",
+      "jobPath": "BUILD-to-HSY_PRETEST__saas-hsy-h5-voucher",
+      "defaultBranch": "test"
+    },
+    "biz-app-service-plus": {
+      "label": "biz-app-service-plus",
+      "jobPath": "BUILD-to-HSY_PRETEST__cc-front-biz-app-service-plus",
+      "defaultBranch": "test"
+    },
+    "hsy-h5-mainapp": {
+      "label": "hsy-h5-mainapp",
+      "jobPath": "BUILD-to-HSY_PRETEST__saas-hsy-h5-mainapp",
+      "defaultBranch": "test"
+    },
+    "saas-cc-web-metapage": {
+      "label": "saas-cc-web-metapage",
+      "jobPath": "BUILD-to-HSY_PRETEST__saas-cc-web-metapage",
+      "defaultBranch": "test"
+    },
+    "mdf-ui-web": {
+      "label": "mdf-ui-web",
+      "jobPath": "BUILD-to-CNPM__cc_web_chanjet-mdf-ui-web",
+      "defaultBranch": "test"
+    },
+    "mdf-biz": {
+      "label": "mdf-biz",
+      "jobPath": "BUILD-to-CNPM__cc_web_chanjet-mdf-biz",
+      "defaultBranch": "test"
+    },
+    "mdf": {
+      "label": "mdf",
+      "jobPath": "BUILD-to-CNPM__cc_web_chanjet-mdf",
+      "defaultBranch": "test"
+    }
+  },
+  "jiraBranchRules": []
+}
+
