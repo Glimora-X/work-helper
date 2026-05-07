@@ -271,14 +271,14 @@ export default function Startup() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA]">
-      <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full h-full flex flex-col">
+    <div className="flex min-h-0 flex-col bg-[#FAFAFA]">
+      <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col">
         <header className="mb-6 shrink-0">
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">工程启动</h1>
           <p className="text-sm text-gray-500 mt-1">一键配置并拉起本地 IDE、Git 分支及多工作区的依赖服务。</p>
         </header>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[500px]">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left: Profile List */}
           <div className="lg:col-span-4 flex flex-col gap-3 h-full">
@@ -334,7 +334,7 @@ export default function Startup() {
           </div>
 
           {/* Right: Configuration & Console */}
-          <div className="lg:col-span-8 flex flex-col gap-4 overflow-hidden h-[calc(100vh-210px)]">
+          <div className="lg:col-span-8 flex min-h-0 flex-col gap-4 overflow-hidden">
             
             {/* Top: Edit Form OR Info Preview Card */}
             {isEditing && editForm ? (
@@ -432,7 +432,7 @@ export default function Startup() {
 
                 <div className="grid grid-cols-1 gap-2 z-10 overflow-y-auto max-h-[160px] pr-2">
                   {!activeProfile ? (
-                    <div className="text-xs text-gray-400 italic">请选择左侧配置文件...</div>
+                    <div className="text-xs text-gray-400 italic">请选择当前功能下的配置文件...</div>
                   ) : activeProfile.projects.map((proj, idx) => (
                     <div key={idx} className="flex flex-col p-3 rounded-lg bg-gray-50 border border-gray-100">
                       <div className="flex items-center justify-between mb-2">

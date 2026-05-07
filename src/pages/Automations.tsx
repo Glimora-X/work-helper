@@ -56,7 +56,8 @@ const displaySchedule = (task: AutomationTask, edits: TaskEdits) =>
   edits[task.id]?.schedule ?? task.schedule;
 
 const DEPLOY_API_BASE =
-  (import.meta.env.VITE_DEPLOY_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/deploy';
+  ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_DEPLOY_API_BASE ?? '/api/deploy').replace(/\/$/, '') ||
+  '/api/deploy';
 
 interface AutomationEvent {
   type: 'log' | 'status' | 'waiting' | 'completed' | 'failed';
@@ -267,8 +268,8 @@ export default function Automations() {
   };
 
   return (
-    <div className="flex flex-col h-full relative" style={{ background: 'var(--bg-secondary)' }}>
-      <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex flex-col h-full relative z-0">
+    <div className="flex min-h-0 flex-col relative" style={{ background: 'var(--bg-secondary)' }}>
+      <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col relative z-0">
         
         <header className="mb-6 shrink-0 flex items-end justify-between">
           <div>

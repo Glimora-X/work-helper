@@ -4,14 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:api\"",
-    "dev:api": "NODE_OPTIONS='' tsx server/deploy-api.ts",
-    "dev:vite": "vite --port=3000 --host=0.0.0.0",
-    "dev:vite-only": "vite --port=3000 --host=0.0.0.0",
+    "postinstall": "patch-package",
+    "dev": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && concurrently -k \\\"npm run dev:vite\\\" \\\"npm run dev:api\\\"\"",
+    "dev:api": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && env NODE_OPTIONS= tsx server/deploy-api.ts\"",
+    "dev:vite": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && vite --port=3000 --host=0.0.0.0\"",
+    "dev:vite-only": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && vite --port=3000 --host=0.0.0.0\"",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "test": "node --import tsx --test test/server/*.test.ts",
+    "test": "node --import tsx --test test/server/*.test.ts test/frontend/*.test.tsx",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
+    "patch-package": "^8.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

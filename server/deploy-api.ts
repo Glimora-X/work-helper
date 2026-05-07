@@ -1156,7 +1156,17 @@ app.get('/api/startup/runs/:runId/events', (req, res) => {
   req.on('close', () => clearInterval(timer));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   scheduleTaskT1();
   console.log(`[deploy-api] listening on http://127.0.0.1:${PORT}`);
+});
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `[deploy-api] 端口 ${PORT} 已被占用（可能还有未关掉的 deploy-api）。可执行 lsof -iTCP:${PORT} -sTCP:LISTEN 查看，或设置环境变量 DEPLOY_API_PORT 换端口。`,
+    );
+  } else {
+    console.error('[deploy-api] listen error:', err);
+  }
+  process.exit(1);
 });

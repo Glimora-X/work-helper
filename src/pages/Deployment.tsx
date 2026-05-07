@@ -51,7 +51,8 @@ const INITIAL_TEMPLATES: Template[] = [
 ];
 
 const DEPLOY_API_BASE =
-  (import.meta.env.VITE_DEPLOY_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/deploy';
+  ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_DEPLOY_API_BASE ?? '/api/deploy').replace(/\/$/, '') ||
+  '/api/deploy';
 
 export default function Deployment() {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -446,7 +447,7 @@ export default function Deployment() {
   const favoritedTemplates = templates.filter(t => favoritedIds.includes(t.id));
 
   return (
-    <div className="flex flex-col h-full bg-[#F5F5F7] overflow-hidden">
+    <div className="flex min-h-0 flex-col bg-[#F5F5F7] overflow-hidden">
       {/* ── Top Header Bar ── */}
       <div className="shrink-0 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4">
         <div className="flex-1 min-w-0">
@@ -669,7 +670,7 @@ export default function Deployment() {
             {phase === 'idle' && (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <Box className="w-8 h-8 mb-3 text-gray-200" />
-                <p className="text-sm text-gray-400">从左侧选择模板，或通过顶部输入框描述部署意图</p>
+                <p className="text-sm text-gray-400">从菜单中进入部署页后，可在此选择模板，或通过顶部输入框描述部署意图</p>
                 <p className="text-[11px] text-gray-300 mt-1.5">"帮我先发 auth 服务再发 admin 页面"</p>
               </div>
             )}
@@ -860,5 +861,3 @@ export default function Deployment() {
     </div>
   );
 }
-
-
