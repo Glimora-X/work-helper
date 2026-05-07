@@ -47,6 +47,7 @@ const INITIAL_TEMPLATES: Template[] = [
   { id: 'tpl_8', name: 'MDF—BIZ', nodes: ['mdf-biz', 'saas-cc-web-metapage'] },
   { id: 'tpl_7', name: 'UI-WEB', nodes: ['mdf-ui-web', 'saas-cc-web-metapage'] },
   { id: 'tpl_11', name: 'BIZ-CORE', nodes: ['biz-core','saas-cc-web','hsy-h5-mainapp'] },
+  { id: 'tpl_12', name: 'SAAS-CC-NODE-METASERVER', nodes: ['saas-cc-node-metaserver', 'saas-cc-node'] },
 ];
 
 const DEPLOY_API_BASE =

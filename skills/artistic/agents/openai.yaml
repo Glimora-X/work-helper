@@ -1,0 +1,4 @@
+interface:
+  display_name: "Artistic"
+  short_description: "High-contrast expressive UI guidance"
+  default_prompt: "Use $artistic to design a bold, high-contrast interface with expressive typography and clear accessibility rules."

@@ -16,6 +16,11 @@
       "jobPath": "BUILD-to-HSY_PRETEST__saas-cc-node",
       "defaultBranch": "test"
     },
+    "saas-cc-node-metaserver": {
+      "label": "saas-cc-node-metaserver",
+      "jobPath": "BUILD-to-CNPM__cc_web_saas-cc-node-metaserver",
+      "defaultBranch": "test"
+    },
     "biz-core": {
       "label": "biz-core",
       "jobPath": "BUILD-to-CNPM__cc_web_cc-front-biz-core",
