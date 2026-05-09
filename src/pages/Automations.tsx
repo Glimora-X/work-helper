@@ -271,25 +271,20 @@ export default function Automations() {
     <div className="flex min-h-0 flex-col relative" style={{ background: 'var(--bg-secondary)' }}>
       <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col relative z-0">
         
-        <header className="mb-6 shrink-0 flex items-end justify-between">
+        <header className="mb-8 shrink-0 flex items-end justify-between">
           <div>
-            <h1
-              className="text-2xl font-semibold tracking-tight flex items-center gap-2.5"
-              style={{ fontFamily: '"Noto Serif SC", serif', color: 'var(--text-primary)' }}
-            >
+            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-3" 
+                style={{ fontFamily: '"Noto Serif SC", serif', color: 'var(--text-primary)' }}>
               <Bot className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
               自动化任务
             </h1>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-              设置定时触发器接管环境维护、信息整理和周报总结等繁杂流程。
+              设置定时触发器接管环境维护、信息整理和周报总结等繁杂流程
             </p>
           </div>
           <button
             onClick={() => setIsCreating(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm text-white"
-            style={{ background: 'var(--accent-primary)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#3a7fc1'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--accent-primary)'; }}
+            className="artistic-button artistic-button-primary"
           >
             <Plus className="w-4 h-4" /> 新建任务
           </button>
@@ -304,14 +299,7 @@ export default function Automations() {
               placeholder="搜索任务名称或规则..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-lg text-sm focus:outline-none transition-shadow"
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-light)',
-                color: 'var(--text-primary)',
-              }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(74,144,217,0.1)'; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+              className="artistic-input w-full pl-9 pr-4"
             />
           </div>
           <div className="flex items-center gap-2 ml-auto text-sm" style={{ color: 'var(--text-secondary)' }}>

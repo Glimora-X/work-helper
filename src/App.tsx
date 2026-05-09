@@ -5,11 +5,13 @@ import {
   Rocket,
   Trash2,
   Zap,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
 import { BrowserRouter as Router, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Automations from './pages/Automations';
 import Cleanup from './pages/Cleanup';
+import Dashboard from './pages/Dashboard';
 import Deployment from './pages/Deployment';
 import Startup from './pages/Startup';
 import Summary from './pages/Summary';
@@ -21,10 +23,11 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-export const defaultRoutePath = '/deploy';
+export const defaultRoutePath = '/dashboard';
 
 export const navItems: NavItem[] = [
-  { name: '部署1', path: '/deploy', icon: Rocket },
+  { name: '控制台', path: '/dashboard', icon: LayoutDashboard },
+  { name: '部署', path: '/deploy', icon: Rocket },
   { name: '启动', path: '/startup', icon: Zap },
   { name: '自动化', path: '/automations', icon: Bot },
   { name: '清理', path: '/cleanup', icon: Trash2 },
@@ -51,7 +54,7 @@ export function TopNav() {
                 className="top-nav-link"
               >
                 {isActive ? <span aria-hidden="true" className="top-nav-current-dot" /> : null}
-                <Icon className="top-nav-icon h-[15px] w-[15px] shrink-0 stroke-[2.1px]" />
+                <Icon className="top-nav-icon h-4 w-4 shrink-0" />
                 <span>{item.name}</span>
               </Link>
             );
@@ -66,6 +69,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={defaultRoutePath} replace />} />
+      <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/deploy" element={<Deployment />} />
       <Route path="/startup" element={<Startup />} />
       <Route path="/automations" element={<Automations />} />

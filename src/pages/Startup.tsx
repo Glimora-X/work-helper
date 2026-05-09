@@ -273,9 +273,9 @@ export default function Startup() {
   return (
     <div className="flex min-h-0 flex-col bg-[#FAFAFA]">
       <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col">
-        <header className="mb-6 shrink-0">
+        <header className="mb-8 shrink-0">
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">工程启动</h1>
-          <p className="text-sm text-gray-500 mt-1">一键配置并拉起本地 IDE、Git 分支及多工作区的依赖服务。</p>
+          <p className="text-sm text-gray-500 mt-1">一键配置并拉起本地 IDE、Git 分支及多工作区的依赖服务</p>
         </header>
 
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
