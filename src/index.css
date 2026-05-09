@@ -1,8 +1,15 @@
-/* 霞鹜文楷 Screen 版（正文主字体）*/
-@import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.1.0/style.css');
 /* Noto Sans SC（标题/加粗兜底）+ Inter（英文数字）+ JetBrains Mono（代码）*/
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+/* 霞鹜文楷 Screen（同源 public/fonts，供 PWA 离线；@import 之后） */
+@font-face {
+  font-family: "LXGW WenKai Screen";
+  src: url("/fonts/LXGWWenKaiScreen.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 @theme {
   --font-sans: "LXGW WenKai Screen", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;

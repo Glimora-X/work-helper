@@ -23,16 +23,15 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-export const defaultRoutePath = '/dashboard';
+export const defaultRoutePath = '/tasks';
 
 export const navItems: NavItem[] = [
-  { name: '控制台', path: '/dashboard', icon: LayoutDashboard },
+  // { name: '控制台', path: '/dashboard', icon: LayoutDashboard },
+  { name: '任务', path: '/tasks', icon: CheckSquare },
   { name: '部署', path: '/deploy', icon: Rocket },
   { name: '启动', path: '/startup', icon: Zap },
   { name: '自动化', path: '/automations', icon: Bot },
-  { name: '清理', path: '/cleanup', icon: Trash2 },
   { name: '总结', path: '/summary', icon: FileText },
-  { name: '任务', path: '/tasks', icon: CheckSquare },
 ];
 
 export function TopNav() {

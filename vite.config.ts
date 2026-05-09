@@ -45,7 +45,9 @@ export default defineConfig(({mode}) => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          // LXGWWenKaiScreen.ttf ≈26MB；默认 2MiB 预缓存上限会排除该文件
+          maximumFileSizeToCacheInBytes: 35 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,ttf}'],
           runtimeCaching: [
             {
               urlPattern: /^\/api\//,
