@@ -52,3 +52,19 @@ View your app in AI Studio: https://ai.studio/apps/09cc7119-e39d-4a69-a312-3e5a2
 - **安全**: 系统会自动获取并携带 `Jenkins-Crumb` (CSRF Token)。
 - **触发**: 通过 POST 请求触发 `/buildWithParameters` 或 `/build` 接口。
 
+打包：日常 dir，分发再 zip（package.json）
+脚本	行为
+npm run dist:dir
+build:desktop → electron-builder --dir --mac，只出 release/mac-arm64 目录，适合日常调试。
+npm run dist
+build:desktop → electron-builder --mac zip，只打 zip（分发用，会慢一些）。
+build.mac.target 默认只保留 ["dir"]，避免一次命令里又打 dir 又打 zip。
+若以后要「一次打出 dir + zip」，可再加脚本，例如：electron-builder --mac dir zip。
+提醒：改过 dist 含义后，日常调试请用 npm run dist:dir；要发给别人安装包时用 npm run dist 打 zip。
+
+图片是竖版（非正方形），强制缩成正方形图标时就会压扁变形。解决方法是把它"填充到正方形画布"：图标主体居中，四周补透明（或背景色）留边距。
+
+直接用 macOS 自带的 sips 命令处理即可，不需要任何额外软件：
+
+
+cd /Users/juanwang/Documents/work-space/owner/助手/public && sips --padToHeightWidth 1024 1024 --padColor FFFFFF app-logo.png --out app-logo-square.png && sips -g pixelWidth -g pixelHeight app-logo-square.png

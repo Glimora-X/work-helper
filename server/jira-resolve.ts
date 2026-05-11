@@ -1,6 +1,9 @@
 /**
  * Resolve Jira issue -> suggested Jenkins job path segments (via component mapping).
+ * 凭据与 `jira-rest.resolveJiraAuth` 一致：仅 JIRA_SERVER_URL + JIRA_USERNAME + 密码或 Token。
  */
+
+import { resolveJiraAuth } from './jira-rest';
 
 export interface JiraResolution {
   nodes: string[];
@@ -37,38 +40,50 @@ function parseFallbackNodes(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
+function userSetJiraRestPathPrefix(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.JIRA_REST_PATH_PREFIX?.trim());
+}
+
 export async function resolveIssueToJobPaths(options: {
   issueKey: string;
-  jiraBaseUrl?: string;
-  jiraEmail?: string;
-  jiraApiToken?: string;
   componentMapJson?: string;
   fallbackNodesCsv?: string;
+  env?: NodeJS.ProcessEnv;
 }): Promise<JiraResolution> {
-  const { issueKey, jiraBaseUrl, jiraEmail, jiraApiToken, componentMapJson, fallbackNodesCsv } =
-    options;
+  const env = options.env ?? process.env;
+  const { issueKey, componentMapJson, fallbackNodesCsv } = options;
   const fallback = parseFallbackNodes(fallbackNodesCsv);
   const map = parseComponentMap(componentMapJson);
 
-  if (!jiraBaseUrl || !jiraEmail || !jiraApiToken) {
+  const cfg = resolveJiraAuth(env);
+  if (cfg.ok === false) {
     return {
       nodes: fallback,
       source: 'fallback',
-      message: 'Jira env not set; using JIRA_RESOLUTION_FALLBACK_NODES.',
+      message: `${cfg.reason}; using JIRA_RESOLUTION_FALLBACK_NODES.`,
     };
   }
 
-  const auth =
-    'Basic ' + Buffer.from(`${jiraEmail}:${jiraApiToken}`, 'utf8').toString('base64');
-  const prefix = (process.env.JIRA_REST_PATH_PREFIX || 'rest/api/3').replace(/^\/+|\/+$/g, '');
-  const url = `${jiraBaseUrl.replace(/\/$/, '')}/${prefix}/issue/${encodeURIComponent(issueKey)}?fields=components`;
+  let prefix = cfg.apiPrefix;
+  let url = `${cfg.baseUrl}/${prefix}/issue/${encodeURIComponent(issueKey)}?fields=components`;
 
-  const resp = await fetch(url, {
-    headers: {
-      Authorization: auth,
-      Accept: 'application/json',
-    },
-  });
+  const headers = {
+    Authorization: cfg.authHeader,
+    Accept: 'application/json',
+  };
+
+  let resp = await fetch(url, { headers });
+
+  if (
+    !resp.ok &&
+    (resp.status === 404 || resp.status === 410) &&
+    !userSetJiraRestPathPrefix(env) &&
+    prefix === 'rest/api/3'
+  ) {
+    prefix = 'rest/api/2';
+    url = `${cfg.baseUrl}/${prefix}/issue/${encodeURIComponent(issueKey)}?fields=components`;
+    resp = await fetch(url, { headers });
+  }
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');

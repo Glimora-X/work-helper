@@ -1,5 +1,6 @@
 import {Calendar, ChevronLeft, ChevronRight, Plus, Trash2} from 'lucide-react';
 import {useCallback, useEffect, useMemo, useState} from 'react';
+import PageHeader from '../components/PageHeader';
 
 const STORAGE_KEY = 'assistant-daily-todos-v1';
 
@@ -123,17 +124,10 @@ export default function Tasks() {
       className="p-6 md:p-10 max-w-6xl mx-auto min-h-[calc(100vh-5rem)]"
       style={{fontFamily: FONT_WENKAI}}
     >
-      <header className="mb-8 md:mb-10">
-        <h1
-          className="text-2xl md:text-3xl font-semibold tracking-tight"
-          style={{color: 'var(--text-primary)'}}
-        >
-          每日待办
-        </h1>
-        <p className="text-sm mt-1" style={{color: 'var(--text-muted)'}}>
-          按日期记录任务，数据保存在本机浏览器
-        </p>
-      </header>
+      <PageHeader
+        title="每日待办"
+        subtitle="按日期记录任务，数据保存在本机浏览器"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,220px)_1fr] gap-8">
         {/* 历史日期 */}

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "chanjet-jira-mcp-new": {
+      "command": "uvx",
+      "args": [
+        "--index-url=https://maven2.rd.chanjet.com/repository/pypi-all/simple",
+        "--from=chanjet-devops-mcp>=0.1.0,<0.2.0",
+        "chanjet_jira_mcp",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "JIRA_SERVER_URL": "https://jira.rd.chanjet.com/",
+        "JIRA_USERNAME": "wangjuan3",
+        "JIRA_PASSWORD": ""
+      }
+    }
+  }
+}

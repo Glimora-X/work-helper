@@ -1,0 +1,374 @@
+/* ─── Skills Library — 与全局 Artistic 设计系统对齐 ───── */
+
+.skills-lib {
+  --sl-claude:  #D97706;
+  --sl-cursor:  #3B82F6;
+  --sl-agents:  #8B5CF6;
+  --sl-codex:   #16A34A;
+
+  font-family: "LXGW WenKai Screen", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  color: var(--text-primary);
+  min-height: 100%;
+  position: relative;
+  -webkit-font-smoothing: antialiased;
+}
+
+.skills-lib__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.75rem 1.25rem 2rem;
+}
+
+@media (min-width: 640px) {
+  .skills-lib__inner {
+    padding: 2.5rem 2rem 3rem;
+  }
+}
+
+/* ─── Toolbar ───────────────────────────────────────────── */
+.skills-lib__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (min-width: 720px) {
+  .skills-lib__toolbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.skills-lib__search-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.skills-lib__search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.skills-lib__search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem 0.75rem 2.65rem;
+  border-radius: 14px;
+  border: 2px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.skills-lib__search::placeholder {
+  color: var(--text-muted);
+}
+
+.skills-lib__search:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1), var(--shadow-card);
+}
+
+/* ─── Filter chips ──────────────────────────────────────── */
+.skills-lib__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.skills-lib__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 2px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.skills-lib__chip:hover {
+  color: var(--primary);
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.05);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.skills-lib__chip--on {
+  background: var(--accent-gradient);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
+}
+
+.skills-lib__chip--on:hover {
+  color: white;
+  border-color: transparent;
+  background: var(--accent-gradient);
+}
+
+/* ─── Meta / Warnings ───────────────────────────────────── */
+.skills-lib__meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.skills-lib__warn {
+  font-size: 0.78rem;
+  color: var(--warning);
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  background: rgba(217, 119, 6, 0.06);
+}
+
+/* ─── Grid ──────────────────────────────────────────────── */
+.skills-lib__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .skills-lib__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.1rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .skills-lib__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ─── Card ──────────────────────────────────────────────── */
+.skills-lib__card {
+  position: relative;
+  border-radius: 16px;
+  border: 2px solid var(--border-light);
+  background: var(--surface);
+  padding: 1.15rem 1.2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 9rem;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition:
+    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.skills-lib__card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04), rgba(139, 92, 246, 0.04));
+  transition: opacity 0.22s ease;
+  pointer-events: none;
+}
+
+.skills-lib__card:hover {
+  transform: translateY(-3px) scale(1.005);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-medium);
+}
+
+.skills-lib__card:hover::before {
+  opacity: 1;
+}
+
+.skills-lib__card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.skills-lib__card-name {
+  font-family: "Noto Sans SC", sans-serif;
+  font-weight: 700;
+  font-size: 0.97rem;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+/* ─── Badges ────────────────────────────────────────────── */
+.skills-lib__badge {
+  flex-shrink: 0;
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.skills-lib__badge--claude {
+  color: var(--sl-claude);
+  background: rgba(217, 119, 6, 0.1);
+  border-color: rgba(217, 119, 6, 0.2);
+}
+.skills-lib__badge--cursor {
+  color: var(--sl-cursor);
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+.skills-lib__badge--agents {
+  color: var(--sl-agents);
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+}
+.skills-lib__badge--codex {
+  color: var(--sl-codex);
+  background: rgba(22, 163, 74, 0.1);
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+/* ─── Description & Path ───────────────────────────────── */
+.skills-lib__desc {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+
+.skills-lib__path {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* ─── Actions ───────────────────────────────────────────── */
+.skills-lib__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.1rem;
+}
+
+.skills-lib__copy {
+  font-family: "Noto Sans SC", sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.32rem 0.65rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--border-light);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.skills-lib__copy:hover {
+  color: var(--primary);
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.skills-lib__copy--done {
+  color: var(--sl-codex);
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(22, 163, 74, 0.06);
+}
+
+/* ─── Empty / Error / Loading ───────────────────────────── */
+.skills-lib__empty,
+.skills-lib__error {
+  text-align: center;
+  padding: 3rem 1rem;
+  border-radius: 16px;
+  border: 2px dashed var(--border-light);
+  color: var(--text-muted);
+  font-size: 0.93rem;
+  line-height: 1.7;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.skills-lib__error {
+  border-style: solid;
+  border-color: rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.03);
+  color: var(--danger);
+}
+
+.skills-lib__error strong {
+  color: var(--danger);
+}
+
+.skills-lib__error code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+}
+
+/* ─── Spinner ───────────────────────────────────────────── */
+.skills-lib__spinner {
+  width: 2rem;
+  height: 2rem;
+  margin: 0 auto 1rem;
+  border: 2.5px solid var(--border-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: skills-lib-spin 0.75s linear infinite;
+}
+
+@keyframes skills-lib-spin {
+  to { transform: rotate(360deg); }
+}

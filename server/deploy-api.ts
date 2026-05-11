@@ -2,6 +2,13 @@ import express from 'express';
 import { config } from 'dotenv';
 import { triggerJenkinsJob, pollBuildUntilComplete } from './jenkins-client';
 import { resolveIssueToJobPaths } from './jira-resolve';
+import { resolveJiraAuth, jiraSearch } from './jira-rest';
+import {
+  buildWeeklySummaryMarkdown,
+  jqlMyIssuesTouchedInWeek,
+  jqlMyOpenIssues,
+  weekJqlDateRange,
+} from './jira-weekly';
 import {
   buildDeployParameters,
   DeployContractError,
@@ -12,18 +19,23 @@ import {
   loadDeployProjectConfig,
   resolveDeployTargets,
 } from './deploy-project-config';
+import { scanLocalSkills } from './local-skills';
 import {
   spawn,
   spawnSync,
   type ChildProcess,
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process';
+import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
-config();
+/** 与 `tsx server/deploy-api.ts` 的脚本位置相对定位项目根 `.env`，避免 cwd 非仓库根时读不到配置 */
+const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
+config({ path: envPath });
 
 const app = express();
 app.use(express.json());
@@ -837,17 +849,117 @@ app.get('/api/deploy/health', (_req, res) => {
     jenkinsMissing: jenkins.ok === false ? jenkins.missing : [],
     deployConfigError: configError,
     projects,
-    jiraConfigured: !!(
-      process.env.JIRA_BASE_URL &&
-      process.env.JIRA_EMAIL &&
-      process.env.JIRA_API_TOKEN
-    ),
+    jiraConfigured: resolveJiraAuth(process.env).ok,
     automation: {
       t1Enabled: AUTOMATION_T1_ENABLED,
       t1Schedules: AUTOMATION_T1_SCHEDULES,
       t1CommandConfigured: !!getConfiguredT1Command(),
     },
   });
+});
+
+/** 扫描本机常见 Agent 技能目录（SKILL.md），供「技能库」页面使用 */
+app.get('/api/local-skills', (_req, res) => {
+  try {
+    const result = scanLocalSkills();
+    res.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({
+      error: msg,
+      skills: [],
+      rootsTried: [],
+      warnings: [msg],
+    });
+  }
+});
+
+/** Jira 个人待办 / 周报（凭据与 MCP `chanjet-jira-mcp-new` 推荐的 JIRA_SERVER_URL 等一致，写在 .env 勿入库） */
+app.get('/api/jira/status', (_req, res) => {
+  const cfg = resolveJiraAuth(process.env);
+  if (cfg.ok === false) {
+    res.json({
+      configured: false,
+      mode: 'none' as const,
+      hint: cfg.reason,
+    });
+    return;
+  }
+  const hasPassword = Boolean(process.env.JIRA_PASSWORD?.trim());
+  const mode = hasPassword ? ('user_password' as const) : ('user_api_token' as const);
+  res.json({ configured: true, mode, serverUrl: cfg.baseUrl });
+});
+
+app.get('/api/jira/my-open', async (req, res) => {
+  try {
+    const maxResults = Math.min(Math.max(Number(req.query.max) || 50, 1), 100);
+    const r = await jiraSearch({
+      jql: jqlMyOpenIssues(),
+      maxResults,
+      logContext: `GET /api/jira/my-open?max=${encodeURIComponent(String(req.query.max ?? maxResults))}`,
+    });
+    if (r.authError) {
+      res.status(503).json({ error: r.authError, issues: [], total: 0 });
+      return;
+    }
+    if (r.error) {
+      res.status(502).json({ error: r.error, issues: [], total: 0 });
+      return;
+    }
+    res.json({ issues: r.issues, total: r.total });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg, issues: [], total: 0 });
+  }
+});
+
+app.get('/api/jira/weekly', async (req, res) => {
+  try {
+    const weekOffset = Number.isFinite(Number(req.query.weekOffset))
+      ? Number(req.query.weekOffset)
+      : 0;
+    const { fromYmd, toYmdExclusive, labelZh } = weekJqlDateRange(weekOffset);
+    const jql = jqlMyIssuesTouchedInWeek(fromYmd, toYmdExclusive);
+    const r = await jiraSearch({
+      jql,
+      maxResults: 100,
+      logContext: `GET /api/jira/weekly?weekOffset=${weekOffset}`,
+    });
+    if (r.authError) {
+      res.status(503).json({
+        error: r.authError,
+        weekOffset,
+        range: { from: fromYmd, toExclusive: toYmdExclusive, labelZh },
+        issues: [],
+        total: 0,
+        markdown: '',
+      });
+      return;
+    }
+    if (r.error) {
+      res.status(502).json({
+        error: r.error,
+        weekOffset,
+        range: { from: fromYmd, toExclusive: toYmdExclusive, labelZh },
+        issues: [],
+        total: 0,
+        markdown: '',
+      });
+      return;
+    }
+    const markdown = buildWeeklySummaryMarkdown(r.issues, labelZh);
+    res.json({
+      weekOffset,
+      range: { from: fromYmd, toExclusive: toYmdExclusive, labelZh },
+      jql,
+      issues: r.issues,
+      total: r.total,
+      markdown,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
 });
 
 app.get('/api/deploy/jira/resolution/:issueKey', async (req, res) => {
@@ -859,11 +971,9 @@ app.get('/api/deploy/jira/resolution/:issueKey', async (req, res) => {
     }
     const result = await resolveIssueToJobPaths({
       issueKey,
-      jiraBaseUrl: process.env.JIRA_BASE_URL,
-      jiraEmail: process.env.JIRA_EMAIL,
-      jiraApiToken: process.env.JIRA_API_TOKEN,
       componentMapJson: process.env.JIRA_COMPONENT_JOB_MAP,
       fallbackNodesCsv: process.env.JIRA_RESOLUTION_FALLBACK_NODES,
+      env: process.env,
     });
     res.json(result);
   } catch (e) {
@@ -1156,17 +1266,74 @@ app.get('/api/startup/runs/:runId/events', (req, res) => {
   req.on('close', () => clearInterval(timer));
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  scheduleTaskT1();
-  console.log(`[deploy-api] listening on http://127.0.0.1:${PORT}`);
-});
-server.on('error', (err: NodeJS.ErrnoException) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(
-      `[deploy-api] 端口 ${PORT} 已被占用（可能还有未关掉的 deploy-api）。可执行 lsof -iTCP:${PORT} -sTCP:LISTEN 查看，或设置环境变量 DEPLOY_API_PORT 换端口。`,
-    );
+/** Electron 等场景：同源托管 Vite 产物，与 /api 共用一端口 */
+const SPA_ROOT = process.env.SERVE_SPA_ROOT?.trim();
+if (SPA_ROOT) {
+  const spaAbs = path.resolve(SPA_ROOT);
+  if (fs.existsSync(spaAbs)) {
+    app.use(express.static(spaAbs));
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        next();
+        return;
+      }
+      if (req.path.startsWith('/api')) {
+        next();
+        return;
+      }
+      res.sendFile(path.join(spaAbs, 'index.html'), (err) => {
+        if (err) next(err);
+      });
+    });
   } else {
-    console.error('[deploy-api] listen error:', err);
+    console.warn('[deploy-api] SERVE_SPA_ROOT set but directory missing:', spaAbs);
   }
-  process.exit(1);
-});
+}
+
+/** 向 Vite 代理广播实际端口的文件（项目根目录） */
+const PORT_FILE = path.join(process.cwd(), '.deploy-api-port');
+
+/** 用 net 探测某端口是否空闲（绑定地址与实际监听保持一致） */
+function probePort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.once('listening', () => srv.close(() => resolve(true)));
+    srv.listen({ port, host: '0.0.0.0', exclusive: true });
+  });
+}
+
+/** 从 preferred 开始依次探测，返回第一个空闲端口 */
+async function findFreePort(preferred: number, maxTries = 10): Promise<number> {
+  for (let i = 0; i < maxTries; i++) {
+    if (await probePort(preferred + i)) return preferred + i;
+  }
+  throw new Error(`端口 ${preferred}–${preferred + maxTries - 1} 均已被占用，无法启动`);
+}
+
+findFreePort(PORT)
+  .then((actualPort) => {
+    // 写端口文件供 Vite 代理读取
+    try { fs.writeFileSync(PORT_FILE, String(actualPort), 'utf8'); } catch { /* 非致命 */ }
+
+    const server = app.listen(actualPort, '0.0.0.0', () => {
+      scheduleTaskT1();
+      if (actualPort !== PORT) {
+        console.log(`[deploy-api] 端口 ${PORT} 已被占用，自动切换至 ${actualPort}`);
+        console.log(`[deploy-api] 提示：Vite 会在启动时读取 .deploy-api-port，代理将自动对齐`);
+      }
+      console.log(`[deploy-api] listening on http://127.0.0.1:${actualPort}`);
+    });
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      console.error('[deploy-api] listen error:', err);
+      process.exit(1);
+    });
+
+    process.on('exit', () => {
+      try { fs.unlinkSync(PORT_FILE); } catch { /* ignore */ }
+    });
+  })
+  .catch((err: Error) => {
+    console.error('[deploy-api]', err.message);
+    process.exit(1);
+  });

@@ -2,16 +2,27 @@
   "name": "react-example",
   "private": true,
   "version": "0.0.0",
+  "description": "工作助手（部署 / 启动 / 自动化 / 待办）",
+  "author": "local",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "postinstall": "patch-package",
-    "dev": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && concurrently -k \\\"npm run dev:vite\\\" \\\"npm run dev:api\\\"\"",
+    "dev": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && concurrently -k \\\"sleep 2 && npm run dev:vite\\\" \\\"npm run dev:api\\\"\"",
     "dev:api": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && env NODE_OPTIONS= tsx server/deploy-api.ts\"",
     "dev:vite": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && vite --port=3000 --host=0.0.0.0\"",
     "dev:vite-only": "bash -c \"unset PREFIX; . \\\"$HOME/.nvm/nvm.sh\\\" && nvm use 22 && vite --port=3000 --host=0.0.0.0\"",
+    "dev:desktop": "concurrently -k \"npm run dev:vite-only\" \"npm run dev:api\" \"wait-on -t 120000 http-get://127.0.0.1:3000 http-get://127.0.0.1:8787/api/deploy/health && node ./node_modules/cross-env/src/bin/cross-env.js ELECTRON_IS_DEV=1 electron .\"",
+    "build:web": "vite build",
+    "build:client": "node ./node_modules/cross-env/src/bin/cross-env.js ELECTRON=1 vite build",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build:desktop": "npm run build:client && npm run build:electron",
     "build": "vite build",
+    "start": "electron .",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist dist-electron release",
+    "dist": "npm run build:desktop && electron-builder --mac zip",
+    "dist:dir": "npm run build:desktop && electron-builder --dir --mac",
     "test": "node --import tsx --test test/server/*.test.ts test/frontend/*.test.tsx",
     "lint": "tsc --noEmit"
   },
@@ -33,11 +44,53 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^40.1.0",
+    "electron-builder": "^26.4.0",
+    "esbuild": "^0.25.0",
     "patch-package": "^8.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.local.assistant",
+    "productName": "助手",
+    "electronDist": "node_modules/electron/dist",
+    "icon": "public/app-logo-square.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "config",
+        "to": "config",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "hardenedRuntime": false
+    },
+    "extraMetadata": {
+      "main": "dist-electron/main.cjs",
+      "type": "commonjs"
+    }
   }
 }

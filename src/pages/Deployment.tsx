@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type FormEvent, type MouseEvent } from 'react';
-import { Terminal, CheckCircle2, XCircle, Loader2, ArrowRight, Clock, Box, Play, Plus, X, Trash2, Save, FilePlus, Tag, GitBranch, ExternalLink, ShieldAlert } from 'lucide-react';
+import { Terminal, CheckCircle2, XCircle, Loader2, ArrowRight, Clock, Box, Play, Plus, X, Trash2, Save, FilePlus, Tag, GitBranch, ExternalLink, ShieldAlert, Rocket } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
 
 type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'queued';
 type Phase = 'idle' | 'draft' | 'executing' | 'completed';
@@ -450,38 +451,35 @@ export default function Deployment() {
     <div className="flex min-h-0 flex-col" style={{ background: 'var(--bg-secondary)' }}>
       <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col">
         
-        {/* ── Header ── */}
-        <header className="mb-8 shrink-0 flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight" 
-                style={{ fontFamily: '"Noto Serif SC", serif' }}>工程部署</h1>
-            <p className="text-sm text-gray-500 mt-1">组合依赖关系，构建有向无环图 (DAG) 流水线</p>
-          </div>
-          
-          {/* Health Badges */}
-          <div className="flex items-center gap-2 text-xs shrink-0 ml-4">
-            {healthError ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-700">
-                <ShieldAlert className="h-3 w-3" />部署 API 不可用
-              </span>
-            ) : health ? (
-              <>
-                <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${health.jenkinsConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-                  {health.jenkinsConfigured ? <CheckCircle2 className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
-                  Jenkins {health.jenkinsConfigured ? `已配置 · ${deployProjects.length} 项目` : '不可用'}
+        <PageHeader
+          icon={Rocket}
+          title="工程部署"
+          subtitle="组合依赖关系，构建有向无环图 (DAG) 流水线"
+          actions={
+            <div className="self-center flex flex-wrap items-center justify-end gap-2 text-xs shrink-0 sm:ml-2">
+              {healthError ? (
+                <span className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-700">
+                  <ShieldAlert className="h-3 w-3" />部署 API 不可用
                 </span>
-                <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${health.jiraConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
-                  {health.jiraConfigured ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                  Jira {health.jiraConfigured ? '已配置' : 'fallback'}
+              ) : health ? (
+                <>
+                  <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${health.jenkinsConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                    {health.jenkinsConfigured ? <CheckCircle2 className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                    Jenkins {health.jenkinsConfigured ? `已配置 · ${deployProjects.length} 项目` : '不可用'}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 ${health.jiraConfigured ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                    {health.jiraConfigured ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                    Jira {health.jiraConfigured ? '已配置' : 'fallback'}
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />检查配置...
                 </span>
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-400">
-                <Loader2 className="h-3 w-3 animate-spin" />检查配置...
-              </span>
-            )}
-          </div>
-        </header>
+              )}
+            </div>
+          }
+        />
 
         {/* Command Input */}
         <div className="mb-6 shrink-0">

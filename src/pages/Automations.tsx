@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Bot, Clock, Play, MoreVertical, FileText, CheckSquare, GitBranch, Plus, Search, ToggleRight, ToggleLeft, X, Sparkles, Zap } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
 
 interface AutomationTask {
   id: string;
@@ -271,24 +272,22 @@ export default function Automations() {
     <div className="flex min-h-0 flex-col relative" style={{ background: 'var(--bg-secondary)' }}>
       <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col relative z-0">
         
-        <header className="mb-8 shrink-0 flex items-end justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-3" 
-                style={{ fontFamily: '"Noto Serif SC", serif', color: 'var(--text-primary)' }}>
-              <Bot className="w-6 h-6" style={{ color: 'var(--accent-primary)' }} />
-              自动化任务
-            </h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-              设置定时触发器接管环境维护、信息整理和周报总结等繁杂流程
-            </p>
-          </div>
-          <button
-            onClick={() => setIsCreating(true)}
-            className="artistic-button artistic-button-primary"
-          >
-            <Plus className="w-4 h-4" /> 新建任务
-          </button>
-        </header>
+        <PageHeader
+          icon={Bot}
+          title="自动化任务"
+          subtitle="设置定时触发器接管环境维护、信息整理和周报总结等繁杂流程"
+          actions={
+            <div className="self-end pb-0.5">
+              <button
+                type="button"
+                onClick={() => setIsCreating(true)}
+                className="artistic-button artistic-button-primary"
+              >
+                <Plus className="w-4 h-4" /> 新建任务
+              </button>
+            </div>
+          }
+        />
 
         {/* Toolbar */}
         <div className="mb-8 flex gap-4 items-center shrink-0">

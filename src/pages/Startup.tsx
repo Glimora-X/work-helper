@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type MouseEvent } from 'react';
-import { Terminal, Settings, Play, Square, Folder, FolderTree, GitBranch, TerminalSquare, Layers, Command as CmdIcon, CheckCircle2, Plus, Edit2, Trash2, X, Save, Loader2 } from 'lucide-react';
+import { Terminal, Settings, Play, Square, Folder, FolderTree, GitBranch, TerminalSquare, Layers, Command as CmdIcon, CheckCircle2, Plus, Edit2, Trash2, X, Save, Loader2, Zap } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
 
 type IDEType = 'cursor' | 'code' | 'webstorm';
 type CmdType = 'yarn dev' | 'yarn w' | 'yarn --force' | 'none' | string;
@@ -273,17 +274,16 @@ export default function Startup() {
   return (
     <div className="flex min-h-0 flex-col bg-[#FAFAFA]">
       <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col">
-        <header className="mb-8 shrink-0">
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">工程启动</h1>
-          <p className="text-sm text-gray-500 mt-1">一键配置并拉起本地 IDE、Git 分支及多工作区的依赖服务</p>
-        </header>
+        <PageHeader
+          icon={Zap}
+          title="工程启动"
+          subtitle="一键配置并拉起本地 IDE、Git 分支及多工作区的依赖服务"
+        />
 
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left: Profile List */}
           <div className="lg:col-span-4 flex flex-col gap-3 h-full">
-             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1 shrink-0">环境配置文件</h2>
-             
              <div className="flex-1 overflow-y-auto w-full flex flex-col gap-3 pr-2 scrollbar-hide pb-6">
                {profiles.length === 0 ? (
                  <div className="text-[11px] text-gray-400 border border-gray-100 rounded-lg p-3 text-center bg-white shrink-0">暂无配置文件</div>

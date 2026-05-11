@@ -1,5 +1,6 @@
 import { Rocket, Zap, Trash2, FileText, CheckSquare, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 
 const actions = [
   {
@@ -47,15 +48,7 @@ const actions = [
 export default function Dashboard() {
   return (
     <div className="p-8 md:p-12 max-w-6xl mx-auto">
-      <header className="mb-12">
-        <h1 className="text-2xl font-semibold tracking-tight mb-2" 
-            style={{ fontFamily: '"Noto Serif SC", serif', color: 'var(--text-primary)' }}>
-          控制台
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          管理开发流水线与日常任务
-        </p>
-      </header>
+      <PageHeader title="控制台" subtitle="管理开发流水线与日常任务" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {actions.map((action) => (

@@ -2,10 +2,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
-/* 霞鹜文楷 Screen（同源 public/fonts，供 PWA 离线；@import 之后） */
+/* 霞鹜文楷 Screen：优先本机「字体册」已安装的字型，其次同源文件（未装字体的环境 / PWA 离线） */
 @font-face {
   font-family: "LXGW WenKai Screen";
-  src: url("/fonts/LXGWWenKaiScreen.ttf") format("truetype");
+  src:
+    local("LXGW WenKai Screen"),
+    local("LXGWWenKaiScreen"),
+    local("霞鹜文楷 屏幕阅读版"),
+    url("/fonts/LXGWWenKaiScreen.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;

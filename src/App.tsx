@@ -2,6 +2,7 @@ import {
   Bot,
   CheckSquare,
   FileText,
+  Library,
   Rocket,
   Trash2,
   Zap,
@@ -14,6 +15,7 @@ import Cleanup from './pages/Cleanup';
 import Dashboard from './pages/Dashboard';
 import Deployment from './pages/Deployment';
 import Startup from './pages/Startup';
+import SkillsLibrary from './pages/SkillsLibrary';
 import Summary from './pages/Summary';
 import Tasks from './pages/Tasks';
 
@@ -28,6 +30,7 @@ export const defaultRoutePath = '/tasks';
 export const navItems: NavItem[] = [
   // { name: '控制台', path: '/dashboard', icon: LayoutDashboard },
   { name: '任务', path: '/tasks', icon: CheckSquare },
+  { name: '技能', path: '/skills', icon: Library },
   { name: '部署', path: '/deploy', icon: Rocket },
   { name: '启动', path: '/startup', icon: Zap },
   { name: '自动化', path: '/automations', icon: Bot },
@@ -75,6 +78,7 @@ export function AppRoutes() {
       <Route path="/cleanup" element={<Cleanup />} />
       <Route path="/summary" element={<Summary />} />
       <Route path="/tasks" element={<Tasks />} />
+      <Route path="/skills" element={<SkillsLibrary />} />
       <Route path="*" element={<Navigate to={defaultRoutePath} replace />} />
     </Routes>
   );
