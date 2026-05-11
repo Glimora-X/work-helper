@@ -1,4 +1,4 @@
-import {app, BrowserWindow, dialog, shell, utilityProcess} from 'electron';
+import {app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, utilityProcess} from 'electron';
 import type {UtilityProcess} from 'electron';
 import http from 'node:http';
 import net from 'node:net';
@@ -6,10 +6,32 @@ import {execSync} from 'node:child_process';
 import path from 'node:path';
 
 let mainWindow: BrowserWindow | null = null;
+let floatWindow: BrowserWindow | null = null;
 let apiChild: UtilityProcess | null = null;
+let desktopUiReady = false;
 
 /** 与 `dev:desktop` 一致：由 concurrently 起 Vite + deploy-api，Electron 只连 3000 */
 const useViteDevServer = process.env.ELECTRON_IS_DEV === '1';
+
+function spaOrigin(): string {
+  return useViteDevServer ? 'http://127.0.0.1:3000' : `http://127.0.0.1:${API_PORT}`;
+}
+
+function showOrCreateMainWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  createWindow();
+}
+
+ipcMain.on('assistant:open-main', () => {
+  showOrCreateMainWindow();
+});
 
 const API_PORT = Number(process.env.DEPLOY_API_PORT || 8787);
 
@@ -172,6 +194,11 @@ async function startBundledApi(): Promise<void> {
 }
 
 function createWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    showOrCreateMainWindow();
+    return;
+  }
+
   const preloadPath = path.join(distElectronRoot(), 'preload.cjs');
 
   mainWindow = new BrowserWindow({
@@ -194,14 +221,90 @@ function createWindow(): void {
   });
 
   if (useViteDevServer) {
-    void mainWindow.loadURL('http://127.0.0.1:3000');
+    void mainWindow.loadURL(`${spaOrigin()}/`);
     mainWindow.webContents.openDevTools({mode: 'detach'});
   } else {
-    void mainWindow.loadURL(`http://127.0.0.1:${API_PORT}/`);
+    void mainWindow.loadURL(`${spaOrigin()}/`);
   }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+const FLOAT_W = 76;
+const FLOAT_H = 76;
+
+function floatBottomRight(): {x: number; y: number} {
+  const {workArea} = screen.getPrimaryDisplay();
+  const margin = 14;
+  return {
+    x: Math.round(workArea.x + workArea.width - FLOAT_W - margin),
+    y: Math.round(workArea.y + workArea.height - FLOAT_H - margin),
+  };
+}
+
+function createFloatWindow(): void {
+  if (floatWindow && !floatWindow.isDestroyed()) {
+    if (!floatWindow.isVisible()) {
+      floatWindow.show();
+    }
+    return;
+  }
+
+  const preloadPath = path.join(distElectronRoot(), 'preload.cjs');
+  const pos = floatBottomRight();
+
+  floatWindow = new BrowserWindow({
+    width: FLOAT_W,
+    height: FLOAT_H,
+    x: pos.x,
+    y: pos.y,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    focusable: true,
+    show: false,
+    ...(process.platform === 'darwin' ? ({type: 'panel'} as const) : {}),
+    webPreferences: {
+      preload: preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  if (process.platform === 'darwin') {
+    floatWindow.setAlwaysOnTop(true, 'floating');
+  }
+
+  floatWindow.webContents.setWindowOpenHandler(({url}) => {
+    void shell.openExternal(url);
+    return {action: 'deny'};
+  });
+
+  floatWindow.webContents.on('context-menu', () => {
+    if (!floatWindow || floatWindow.isDestroyed()) return;
+    Menu.buildFromTemplate([
+      {label: '打开主窗口', click: () => showOrCreateMainWindow()},
+      {type: 'separator'},
+      {label: '退出', click: () => app.quit()},
+    ]).popup({window: floatWindow});
+  });
+
+  void floatWindow.loadURL(`${spaOrigin()}/electron-float`);
+  floatWindow.once('ready-to-show', () => {
+    floatWindow?.show();
+  });
+
+  floatWindow.on('closed', () => {
+    floatWindow = null;
   });
 }
 
@@ -220,6 +323,8 @@ async function ready(): Promise<void> {
   }
 
   createWindow();
+  createFloatWindow();
+  desktopUiReady = true;
 }
 
 void app.whenReady().then(() => {
@@ -233,9 +338,13 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+  if (!desktopUiReady) return;
+  if (!floatWindow || floatWindow.isDestroyed()) {
+    createFloatWindow();
+  } else if (!floatWindow.isVisible()) {
+    floatWindow.show();
   }
+  showOrCreateMainWindow();
 });
 
 app.on('before-quit', () => {

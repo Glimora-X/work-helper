@@ -372,3 +372,14 @@ code, pre, .font-mono {
   color: var(--text-muted);
   letter-spacing: 0.02em;
 }
+
+/* Electron 桌面浮标窗口：透明背景 */
+html.electron-float-mode,
+html.electron-float-mode body,
+html.electron-float-mode #root {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+  box-shadow: none;
+}

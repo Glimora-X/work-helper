@@ -1,5 +1,8 @@
-import {contextBridge} from 'electron';
+import {contextBridge, ipcRenderer} from 'electron';
 
 contextBridge.exposeInMainWorld('assistantDesktop', {
   isDesktop: true,
+  openMainWindow: () => {
+    ipcRenderer.send('assistant:open-main');
+  },
 });

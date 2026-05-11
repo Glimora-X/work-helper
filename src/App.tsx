@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import FloatDock from './pages/FloatDock';
 import Automations from './pages/Automations';
 import Cleanup from './pages/Cleanup';
 import Dashboard from './pages/Dashboard';
@@ -114,10 +115,18 @@ function AppShell() {
   );
 }
 
+function AppRoot() {
+  const location = useLocation();
+  if (location.pathname === '/electron-float') {
+    return <FloatDock />;
+  }
+  return <AppShell />;
+}
+
 export default function App() {
   return (
     <Router>
-      <AppShell />
+      <AppRoot />
     </Router>
   );
 }

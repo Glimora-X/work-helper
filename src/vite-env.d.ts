@@ -1,7 +1,11 @@
 /// <reference types="vite/client" />
 
 interface Window {
-  assistantDesktop?: {isDesktop: boolean};
+  assistantDesktop?: {
+    isDesktop: boolean;
+    /** 由主进程处理：显示或创建主窗口 */
+    openMainWindow?: () => void;
+  };
 }
 
 interface ImportMetaEnv {
