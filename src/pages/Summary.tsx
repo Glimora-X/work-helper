@@ -1,7 +1,13 @@
 import PageHeader from '../components/PageHeader';
 import { deployApiUrl } from '../lib/deploy-api-url';
+import {
+  addJiraTodoToToday,
+  markTodayTodosDoneForJiraKey,
+  readTodayJiraIssueKeys,
+} from '../lib/daily-todos-storage';
 import { ChevronLeft, ChevronRight, ClipboardList, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type JiraStatusPayload = {
   configured: boolean;
@@ -55,6 +61,76 @@ export default function Summary() {
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
   const [copyDone, setCopyDone] = useState(false);
+
+  const [issueMenu, setIssueMenu] = useState<{
+    x: number;
+    y: number;
+    issueKey: string;
+    summary: string;
+  } | null>(null);
+  const issueMenuRef = useRef<HTMLDivElement | null>(null);
+  const [issueActionHint, setIssueActionHint] = useState<string | null>(null);
+  const [submitTestKey, setSubmitTestKey] = useState<string | null>(null);
+  const [todayJiraKeys, setTodayJiraKeys] = useState(() => readTodayJiraIssueKeys());
+
+  const refreshTodayJiraKeys = useCallback(() => {
+    setTodayJiraKeys(readTodayJiraIssueKeys());
+  }, []);
+
+  useEffect(() => {
+    refreshTodayJiraKeys();
+  }, [refreshTodayJiraKeys]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refreshTodayJiraKeys();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [refreshTodayJiraKeys]);
+
+  useLayoutEffect(() => {
+    if (!issueMenu) return;
+    const el = issueMenuRef.current;
+    if (!el) return;
+    const pad = 8;
+    let left = issueMenu.x;
+    let top = issueMenu.y;
+    const rect = el.getBoundingClientRect();
+    if (left + rect.width > window.innerWidth - pad) {
+      left = window.innerWidth - rect.width - pad;
+    }
+    if (top + rect.height > window.innerHeight - pad) {
+      top = window.innerHeight - rect.height - pad;
+    }
+    left = Math.max(pad, left);
+    top = Math.max(pad, top);
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }, [issueMenu]);
+
+  useEffect(() => {
+    if (!issueMenu) return;
+    const close = (e: MouseEvent) => {
+      if (issueMenuRef.current?.contains(e.target as Node)) return;
+      setIssueMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIssueMenu(null);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [issueMenu]);
+
+  useEffect(() => {
+    if (!issueActionHint) return;
+    const t = window.setTimeout(() => setIssueActionHint(null), 4200);
+    return () => clearTimeout(t);
+  }, [issueActionHint]);
 
   const loadStatus = useCallback(async () => {
     setStatusLoading(true);
@@ -188,6 +264,57 @@ export default function Summary() {
     void loadWeekly(weekOffset);
   }, [status?.configured, weekOffset, loadWeekly]);
 
+  const addToTodayFromMenu = useCallback(() => {
+    if (!issueMenu) return;
+    const key = issueMenu.issueKey;
+    const { added } = addJiraTodoToToday(key, issueMenu.summary);
+    setIssueMenu(null);
+    refreshTodayJiraKeys();
+    if (added) setIssueActionHint(`已将 ${key} 加入今日待办`);
+  }, [issueMenu, refreshTodayJiraKeys]);
+
+  const submitTestFromMenu = useCallback(async () => {
+    if (!issueMenu) return;
+    const key = issueMenu.issueKey;
+    setSubmitTestKey(key);
+    try {
+      const url = deployApiUrl('jira', `/issue/${encodeURIComponent(key)}/submit-test`);
+      const r = await fetch(url, { method: 'POST' });
+      const raw = await r.text();
+      let j: {
+        ok?: boolean;
+        error?: string;
+        transitionName?: string;
+      };
+      try {
+        j = JSON.parse(raw) as typeof j;
+      } catch {
+        setIssueActionHint(`提测失败：响应无法解析（HTTP ${r.status}）`);
+        setIssueMenu(null);
+        return;
+      }
+      if (!r.ok || !j.ok) {
+        const detail = j.error || raw.slice(0, 200);
+        setIssueActionHint(`提测失败：${detail}`);
+        setIssueMenu(null);
+        return;
+      }
+      const n = markTodayTodosDoneForJiraKey(key);
+      setIssueMenu(null);
+      refreshTodayJiraKeys();
+      void loadOpen();
+      const trans = j.transitionName ? `（${j.transitionName}）` : '';
+      setIssueActionHint(
+        n > 0 ? `已提测 ${key}${trans}，并将今日 ${n} 条关联待办标为已完成` : `已提测 ${key}${trans}`
+      );
+    } catch (e) {
+      setIssueActionHint(`提测失败：${e instanceof Error ? e.message : String(e)}`);
+      setIssueMenu(null);
+    } finally {
+      setSubmitTestKey(null);
+    }
+  }, [issueMenu, loadOpen, refreshTodayJiraKeys]);
+
   const copyWeekly = async () => {
     if (!weeklyMd) return;
     try {
@@ -306,7 +433,20 @@ export default function Summary() {
                 刷新列表
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-6 relative">
+              {issueActionHint ? (
+                <p
+                  className="text-xs rounded-lg border px-3 py-2 mb-3"
+                  style={{
+                    borderColor: 'var(--border-light)',
+                    background: 'var(--neutral-50)',
+                    color: 'var(--text-secondary)',
+                  }}
+                  role="status"
+                >
+                  {issueActionHint}
+                </p>
+              ) : null}
               {openError ? (
                 <p className="text-sm" style={{ color: 'var(--danger)' }}>
                   {openError}
@@ -326,10 +466,20 @@ export default function Summary() {
                     const st = f?.status?.name ?? '';
                     const pr = f?.project?.key ?? '';
                     const sum = f?.summary ?? '';
+                    const inTodayTodo = todayJiraKeys.has(row.key.toUpperCase());
                     return (
                       <li
                         key={row.key}
-                        className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border px-4 py-3 text-sm"
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setIssueMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            issueKey: row.key,
+                            summary: sum,
+                          });
+                        }}
+                        className="flex flex-wrap items-start justify-between gap-2 rounded-lg border px-4 py-3 text-sm cursor-context-menu"
                         style={{ borderColor: 'var(--border-light)' }}
                       >
                         <div className="min-w-0 flex-1">
@@ -350,11 +500,62 @@ export default function Summary() {
                             {sum}
                           </p>
                         </div>
+                        {inTodayTodo ? (
+                          <span
+                            className="shrink-0 text-[11px] font-medium rounded-md px-2 py-1 border self-start whitespace-nowrap"
+                            style={{
+                              borderColor: 'var(--border-medium)',
+                              color: 'var(--secondary)',
+                              background: 'color-mix(in srgb, var(--secondary) 10%, transparent)',
+                            }}
+                            title="该工单已在「每日待办」今天的列表中"
+                          >
+                            已在今日待办
+                          </span>
+                        ) : null}
                       </li>
                     );
                   })}
                 </ul>
               )}
+              {issueMenu
+                ? createPortal(
+                    <div
+                      ref={issueMenuRef}
+                      className="fixed z-[10000] min-w-[11rem] rounded-lg border py-1 text-sm shadow-lg"
+                      style={{
+                        left: issueMenu.x,
+                        top: issueMenu.y,
+                        borderColor: 'var(--border-medium)',
+                        background: 'var(--bg-primary, #fff)',
+                        color: 'var(--text-primary)',
+                      }}
+                      role="menu"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="w-full text-left px-3 py-2 hover:bg-neutral-100 transition-colors"
+                        onClick={addToTodayFromMenu}
+                      >
+                        加入今日待办
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="w-full text-left px-3 py-2 hover:bg-neutral-100 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                        disabled={Boolean(submitTestKey)}
+                        onClick={() => void submitTestFromMenu()}
+                      >
+                        {submitTestKey === issueMenu.issueKey ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden />
+                        ) : null}
+                        提测（Jira 工作流）
+                      </button>
+                    </div>,
+                    document.body
+                  )
+                : null}
             </div>
           </section>
 

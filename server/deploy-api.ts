@@ -2,7 +2,7 @@ import express from 'express';
 import { config } from 'dotenv';
 import { triggerJenkinsJob, pollBuildUntilComplete } from './jenkins-client';
 import { resolveIssueToJobPaths } from './jira-resolve';
-import { resolveJiraAuth, jiraSearch } from './jira-rest';
+import { resolveJiraAuth, jiraSearch, jiraSubmitTestTransition } from './jira-rest';
 import {
   buildWeeklySummaryMarkdown,
   jqlMyIssuesTouchedInWeek,
@@ -20,6 +20,16 @@ import {
   resolveDeployTargets,
 } from './deploy-project-config';
 import { scanLocalSkills } from './local-skills';
+import { scanLocalMcp } from './local-mcp';
+import { scanLocalModels } from './local-models';
+import {
+  listOllamaModelOptions,
+  runAssistantChat,
+  type AssistantChatRequestBody,
+  type AssistantProvider,
+} from './assistant-chat';
+import { getRemoteKnowledgeBridgeCount, searchKnowledge } from './knowledge-search';
+import { isConfluenceSearchConfigured } from './confluence-search';
 import {
   spawn,
   spawnSync,
@@ -874,6 +884,140 @@ app.get('/api/local-skills', (_req, res) => {
   }
 });
 
+/** 本机 Cursor MCP 配置（~/.cursor/mcp.json 与仓库 .cursor/mcp.json） */
+app.get('/api/local-mcp', (_req, res) => {
+  try {
+    const result = scanLocalMcp();
+    res.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({
+      error: msg,
+      servers: [],
+      configsTried: [],
+      warnings: [msg],
+    });
+  }
+});
+
+/** 本机常见本地模型（Ollama、LM Studio .gguf 等） */
+app.get('/api/local-models', (_req, res) => {
+  try {
+    const result = scanLocalModels();
+    res.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({
+      error: msg,
+      models: [],
+      rootsTried: [],
+      warnings: [msg],
+    });
+  }
+});
+
+/** 助手页：模型与知识库配置探测（不含密钥） */
+app.get('/api/assistant/options', (_req, res) => {
+  try {
+    const geminiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
+    const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
+    const openaiConfigured = Boolean(process.env.OPENAI_API_KEY?.trim());
+    const openaiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
+    const ollamaHost = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434';
+    const ollamaModels = listOllamaModelOptions();
+    res.json({
+      geminiConfigured,
+      geminiModel,
+      openaiConfigured,
+      openaiModel,
+      ollamaHost,
+      ollamaModels,
+      knowledge: {
+        localConfigured: Boolean(process.env.ASSISTANT_KB_LOCAL_DIRS?.trim()),
+        wikiConfigured: getRemoteKnowledgeBridgeCount() > 0,
+        remoteSearchUrlCount: getRemoteKnowledgeBridgeCount(),
+        confluenceConfigured: isConfluenceSearchConfigured(),
+      },
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** 仅检索知识库（本地目录 + Confluence + 多路 HTTP 桥），供助手或「预览来源」 */
+app.post('/api/knowledge/search', async (req, res) => {
+  const q = String(req.body?.query ?? '').trim();
+  if (!q) {
+    res.status(400).json({ error: 'query 必填', hits: [], warnings: [] });
+    return;
+  }
+  try {
+    const result = await searchKnowledge(q);
+    res.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg, hits: [], warnings: [msg] });
+  }
+});
+
+/** Artistic 助手对话（Ollama 本机 / Gemini 云端 + 可选知识库注入） */
+app.post('/api/assistant/chat', async (req, res) => {
+  const body = req.body as AssistantChatRequestBody;
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  if (messages.length === 0) {
+    res.status(400).json({ error: 'messages 不能为空', reply: '', knowledgeHits: [], warnings: [] });
+    return;
+  }
+  if (messages.length > 40) {
+    res.status(400).json({ error: 'messages 过多（最多 40 条）', reply: '', knowledgeHits: [], warnings: [] });
+    return;
+  }
+  for (const m of messages) {
+    if (typeof m?.content === 'string' && m.content.length > 80_000) {
+      res.status(400).json({ error: '单条消息过长', reply: '', knowledgeHits: [], warnings: [] });
+      return;
+    }
+  }
+  const provider: AssistantProvider =
+    body.provider === 'gemini'
+      ? 'gemini'
+      : body.provider === 'openai'
+        ? 'openai'
+        : 'ollama';
+  if (provider === 'gemini' && !process.env.GEMINI_API_KEY?.trim()) {
+    res.status(503).json({
+      error: '未配置 GEMINI_API_KEY，无法使用云端 Gemini',
+      reply: '',
+      knowledgeHits: [],
+      warnings: [],
+    });
+    return;
+  }
+  if (provider === 'openai' && !process.env.OPENAI_API_KEY?.trim()) {
+    res.status(503).json({
+      error: '未配置 OPENAI_API_KEY，无法使用 GPT（OpenAI）',
+      reply: '',
+      knowledgeHits: [],
+      warnings: [],
+    });
+    return;
+  }
+  try {
+    const out = await runAssistantChat({
+      messages,
+      provider,
+      model: String(body.model || '').trim(),
+      retrieveKnowledge: Boolean(body.retrieveKnowledge),
+      ollamaBase: typeof body.ollamaBase === 'string' ? body.ollamaBase : undefined,
+    });
+    res.json(out);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(502).json({ error: msg, reply: '', knowledgeHits: [], warnings: [msg] });
+  }
+});
+
 /** Jira 个人待办 / 周报（凭据与 MCP `chanjet-jira-mcp-new` 推荐的 JIRA_SERVER_URL 等一致，写在 .env 勿入库） */
 app.get('/api/jira/status', (_req, res) => {
   const cfg = resolveJiraAuth(process.env);
@@ -910,6 +1054,38 @@ app.get('/api/jira/my-open', async (req, res) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(500).json({ error: msg, issues: [], total: 0 });
+  }
+});
+
+/** 对工单执行「提测」工作流过渡（过渡名默认匹配「提测」等，见 jira-rest jiraSubmitTestTransition） */
+app.post('/api/jira/issue/:issueKey/submit-test', async (req, res) => {
+  try {
+    const issueKey = req.params.issueKey?.trim() ?? '';
+    const r = await jiraSubmitTestTransition({
+      issueKey,
+      logContext: `POST /api/jira/issue/${encodeURIComponent(issueKey)}/submit-test`,
+    });
+    if (r.authError) {
+      res.status(503).json({ error: r.authError, ok: false });
+      return;
+    }
+    if (!r.ok) {
+      res.status(400).json({
+        error: r.error,
+        ok: false,
+        availableTransitions: r.availableTransitions,
+      });
+      return;
+    }
+    res.json({
+      ok: true,
+      issueKey: issueKey.toUpperCase(),
+      transitionId: r.transitionId,
+      transitionName: r.transitionName,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg, ok: false });
   }
 });
 

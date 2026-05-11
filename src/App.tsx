@@ -4,11 +4,13 @@ import {
   FileText,
   Library,
   Rocket,
+  Sparkles,
   Trash2,
   Zap,
   LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import Automations from './pages/Automations';
 import Cleanup from './pages/Cleanup';
@@ -16,6 +18,8 @@ import Dashboard from './pages/Dashboard';
 import Deployment from './pages/Deployment';
 import Startup from './pages/Startup';
 import SkillsLibrary from './pages/SkillsLibrary';
+
+const ArtisticAssistant = lazy(() => import('./pages/ArtisticAssistant'));
 import Summary from './pages/Summary';
 import Tasks from './pages/Tasks';
 
@@ -31,6 +35,7 @@ export const navItems: NavItem[] = [
   // { name: '控制台', path: '/dashboard', icon: LayoutDashboard },
   { name: '任务', path: '/tasks', icon: CheckSquare },
   { name: '技能', path: '/skills', icon: Library },
+  { name: '助手', path: '/artistic', icon: Sparkles },
   { name: '部署', path: '/deploy', icon: Rocket },
   { name: '启动', path: '/startup', icon: Zap },
   { name: '自动化', path: '/automations', icon: Bot },
@@ -79,6 +84,20 @@ export function AppRoutes() {
       <Route path="/summary" element={<Summary />} />
       <Route path="/tasks" element={<Tasks />} />
       <Route path="/skills" element={<SkillsLibrary />} />
+      <Route
+        path="/artistic"
+        element={
+          <Suspense
+            fallback={
+              <div className="flex flex-1 min-h-[40vh] items-center justify-center text-sm" style={{color: 'var(--text-muted)'}}>
+                加载助手…
+              </div>
+            }
+          >
+            <ArtisticAssistant />
+          </Suspense>
+        }
+      />
       <Route path="*" element={<Navigate to={defaultRoutePath} replace />} />
     </Routes>
   );

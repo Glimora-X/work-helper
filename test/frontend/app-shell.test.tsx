@@ -33,14 +33,14 @@ test('top navigation omits the home entry and marks the current page', () => {
 
   assert.equal(html.includes('首页'), false);
   assert.equal(html.includes('Dev Console'), false);
-  assert.equal(html.includes('助手'), false);
+  assert.equal(html.includes('助手'), true);
   assert.match(html, /data-nav-position="bottom"/);
   assert.match(html, /部署/);
   assert.match(html, /aria-current="page"/);
 });
 
-test('default route points to deploy', () => {
-  assert.equal(defaultRoutePath, '/deploy');
+test('default route points to tasks', () => {
+  assert.equal(defaultRoutePath, '/tasks');
 });
 
 test('route shell renders the deploy page for deploy path', () => {

@@ -1,26 +1,18 @@
-import {Calendar, ChevronLeft, ChevronRight, Plus, Trash2} from 'lucide-react';
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {Calendar, ChevronLeft, ChevronRight, ExternalLink, Plus, Trash2} from 'lucide-react';
+import {type CSSProperties, useCallback, useEffect, useMemo, useState} from 'react';
 import PageHeader from '../components/PageHeader';
-
-const STORAGE_KEY = 'assistant-daily-todos-v1';
+import {deployApiUrl} from '../lib/deploy-api-url';
+import {
+  DAILY_TODOS_STORAGE_KEY,
+  loadDailyTodos,
+  todayISODate,
+  type DailyTodoItem,
+} from '../lib/daily-todos-storage';
 
 /** 与 public/fonts/LXGWWenKaiScreen.ttf 的 @font-face 名称一致 */
 const FONT_WENKAI = '"LXGW WenKai Screen", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif';
 
-type TodoItem = {
-  id: string;
-  text: string;
-  done: boolean;
-  createdAt: number;
-};
-
-function todayISODate(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+type TodoItem = DailyTodoItem;
 
 function shiftISODate(iso: string, deltaDays: number): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -29,17 +21,6 @@ function shiftISODate(iso: string, deltaDays: number): string {
   const mm = String(dt.getMonth() + 1).padStart(2, '0');
   const dd = String(dt.getDate()).padStart(2, '0');
   return `${yy}-${mm}-${dd}`;
-}
-
-function loadStore(): Record<string, TodoItem[]> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, TodoItem[]>;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function formatDateHeading(iso: string): string {
@@ -53,15 +34,111 @@ function formatDateHeading(iso: string): string {
   }).format(dt);
 }
 
+type JiraStatusPayload = {configured?: boolean; serverUrl?: string};
+
+function jiraBrowseHref(serverUrl: string | undefined, issueKey: string): string | undefined {
+  const base = serverUrl?.trim().replace(/\/$/, '');
+  if (!base) return undefined;
+  return `${base}/browse/${encodeURIComponent(issueKey)}`;
+}
+
+/** 从正文或 jiraKey 解析出 Jira 号，并把开头的 `[KEY]` 渲染为打开 Jira 的超链接 */
+function TodoItemBody({
+  text,
+  jiraKey,
+  jiraServerUrl,
+  done,
+}: {
+  text: string;
+  jiraKey?: string;
+  jiraServerUrl?: string;
+  done: boolean;
+}) {
+  const fromField = jiraKey?.trim().toUpperCase() ?? '';
+  const fromBracket = (() => {
+    const m = text.match(/^\[([A-Z][A-Z0-9]+-\d+)\]/i);
+    return m ? m[1].toUpperCase() : '';
+  })();
+  const resolvedKey = fromField || fromBracket;
+  const href = resolvedKey && jiraServerUrl ? jiraBrowseHref(jiraServerUrl, resolvedKey) : undefined;
+  const bracket = `[${resolvedKey}]`;
+  const styleSpan: CSSProperties = {
+    color: 'var(--text-primary)',
+    textDecoration: done ? 'line-through' : undefined,
+    opacity: done ? 0.65 : 1,
+  };
+
+  if (href && resolvedKey) {
+    const headLen = bracket.length;
+    const startsWithBracket =
+      text.length >= headLen && text.slice(0, headLen).toUpperCase() === bracket.toUpperCase();
+
+    const linkEl = (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-0.5 font-mono text-sm font-semibold no-underline hover:underline shrink-0"
+        style={{color: 'var(--primary)'}}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {bracket}
+        <ExternalLink className="w-3.5 h-3.5 opacity-70" aria-hidden />
+      </a>
+    );
+
+    if (startsWithBracket) {
+      const rest = text.slice(headLen).replace(/^\s+/, '');
+      return (
+        <span className="flex-1 text-base leading-relaxed break-words" style={styleSpan}>
+          {linkEl}
+          {rest ? <span> {rest}</span> : null}
+        </span>
+      );
+    }
+
+    return (
+      <span className="flex-1 text-base leading-relaxed break-words" style={styleSpan}>
+        {linkEl}
+        <span> {text}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex-1 text-base leading-relaxed break-words" style={styleSpan}>
+      {text}
+    </span>
+  );
+}
+
 export default function Tasks() {
   const [store, setStore] = useState<Record<string, TodoItem[]>>({});
   const [selectedDate, setSelectedDate] = useState(todayISODate);
   const [draft, setDraft] = useState('');
   const [hydrated, setHydrated] = useState(false);
+  const [jiraServerUrl, setJiraServerUrl] = useState<string | undefined>();
 
   useEffect(() => {
-    setStore(loadStore());
+    setStore(loadDailyTodos());
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(deployApiUrl('jira', '/status'));
+        const j = (await r.json()) as JiraStatusPayload;
+        if (cancelled || !j?.configured || typeof j.serverUrl !== 'string') return;
+        setJiraServerUrl(j.serverUrl.replace(/\/$/, ''));
+      } catch {
+        /* 未配置 Jira 时条目仍为纯文本 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -70,7 +147,7 @@ export default function Tasks() {
     for (const [k, list] of Object.entries(store)) {
       if (Array.isArray(list) && list.length > 0) cleaned[k] = list;
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    localStorage.setItem(DAILY_TODOS_STORAGE_KEY, JSON.stringify(cleaned));
   }, [store, hydrated]);
 
   const todos = store[selectedDate] ?? [];
@@ -261,16 +338,12 @@ export default function Tasks() {
                     className="mt-1 h-4 w-4 rounded border-neutral-300 shrink-0"
                     aria-label={t.done ? '标记为未完成' : '标记为已完成'}
                   />
-                  <span
-                    className="flex-1 text-base leading-relaxed break-words"
-                    style={{
-                      color: 'var(--text-primary)',
-                      textDecoration: t.done ? 'line-through' : undefined,
-                      opacity: t.done ? 0.65 : 1,
-                    }}
-                  >
-                    {t.text}
-                  </span>
+                  <TodoItemBody
+                    text={t.text}
+                    jiraKey={t.jiraKey}
+                    jiraServerUrl={jiraServerUrl}
+                    done={t.done}
+                  />
                   <button
                     type="button"
                     onClick={() => removeTodo(t.id)}

@@ -265,3 +265,207 @@ export async function jiraSearch(options: {
     return { issues: [], total: 0, error: '无法解析 Jira 响应 JSON' };
   }
 }
+
+// —— Issue 工作流过渡（提测等）——
+
+export type JiraTransitionOption = { id: string; name: string };
+
+export type JiraSubmitTestResult =
+  | { ok: true; transitionId: string; transitionName?: string }
+  | {
+      ok: false;
+      error: string;
+      availableTransitions?: JiraTransitionOption[];
+    };
+
+async function jiraIssueTransitionsRequest(
+  baseUrl: string,
+  apiPrefix: string,
+  authHeader: string,
+  issueKey: string,
+  method: 'GET' | 'POST',
+  postBody?: unknown
+): Promise<{ ok: boolean; status: number; text: string }> {
+  const path = `issue/${encodeURIComponent(issueKey)}/transitions`;
+  const url = `${baseUrl}/${apiPrefix}/${path}`;
+  const resp = await fetch(url, {
+    method,
+    headers: {
+      Authorization: authHeader,
+      Accept: 'application/json',
+      ...(method === 'POST' ? {'Content-Type': 'application/json'} : {}),
+    },
+    ...(method === 'POST' && postBody !== undefined ? {body: JSON.stringify(postBody)} : {}),
+  });
+  const text = await resp.text();
+  return { ok: resp.ok, status: resp.status, text };
+}
+
+function userSetJiraRestPathPrefixLocal(env: NodeJS.ProcessEnv | undefined): boolean {
+  return Boolean((env ?? process.env).JIRA_REST_PATH_PREFIX?.trim());
+}
+
+function defaultSubmitTestTransitionNames(): string[] {
+  return ['提测', '提交测试', '待测试', 'Ready for QA', 'Submit for QA'];
+}
+
+function parseTransitionNamesFromEnv(raw: string | undefined): string[] {
+  const s = (raw ?? '').trim();
+  if (!s) return defaultSubmitTestTransitionNames();
+  return s
+    .split(/[,，]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function pickSubmitTestTransition(
+  transitions: JiraTransitionOption[],
+  names: string[]
+): JiraTransitionOption | undefined {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const nameSet = new Set(names.map(norm));
+  for (const t of transitions) {
+    const n = norm(t.name);
+    if (nameSet.has(n)) return t;
+  }
+  for (const want of names) {
+    const w = want.trim().toLowerCase();
+    if (w.length < 2) continue;
+    for (const t of transitions) {
+      if (norm(t.name).includes(w)) return t;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 对工单执行「提测」类工作流过渡。
+ * - 若设置 `JIRA_SUBMIT_TEST_TRANSITION_ID`，直接使用该过渡 id；
+ * - 否则 GET 可用过渡，按 `JIRA_SUBMIT_TEST_TRANSITION_NAMES`（逗号分隔，默认含「提测」等）匹配名称。
+ */
+export async function jiraSubmitTestTransition(options: {
+  issueKey: string;
+  env?: NodeJS.ProcessEnv;
+  logContext?: string;
+}): Promise<JiraSubmitTestResult & { authError?: string }> {
+  const logCtx = options.logContext?.trim();
+  const issueKey = options.issueKey.trim().toUpperCase();
+  if (!issueKey) {
+    return { ok: false, error: '缺少工单号' };
+  }
+
+  const cfg = resolveJiraAuth(options.env);
+  if (cfg.ok === false) {
+    return { ok: false, error: cfg.reason, authError: cfg.reason };
+  }
+
+  const env = options.env ?? process.env;
+  const explicitId = (env.JIRA_SUBMIT_TEST_TRANSITION_ID ?? '').trim();
+  const candidateNames = parseTransitionNamesFromEnv(env.JIRA_SUBMIT_TEST_TRANSITION_NAMES);
+
+  const runWithPrefix = async (apiPrefix: string) => {
+    let res = await jiraIssueTransitionsRequest(
+      cfg.baseUrl,
+      apiPrefix,
+      cfg.authHeader,
+      issueKey,
+      'GET'
+    );
+    return { res, apiPrefix };
+  };
+
+  let { res, apiPrefix } = await runWithPrefix(cfg.apiPrefix);
+  if (
+    !res.ok &&
+    (res.status === 404 || res.status === 410) &&
+    !userSetJiraRestPathPrefixLocal(env) &&
+    cfg.apiPrefix === 'rest/api/3'
+  ) {
+    if (logCtx) {
+      console.warn('[jiraSubmitTestTransition]', logCtx, 'GET transitions 失败，改用 rest/api/2', {
+        httpStatus: res.status,
+      });
+    }
+    const retry = await runWithPrefix('rest/api/2');
+    res = retry.res;
+    apiPrefix = retry.apiPrefix;
+  }
+
+  let transitions: JiraTransitionOption[] = [];
+  if (res.ok) {
+    try {
+      const data = JSON.parse(res.text) as {transitions?: {id?: string; name?: string}[]};
+      const rawList = Array.isArray(data.transitions) ? data.transitions : [];
+      transitions = rawList
+        .map((t) => ({
+          id: String(t.id ?? '').trim(),
+          name: String(t.name ?? '').trim(),
+        }))
+        .filter((t) => t.id);
+    } catch {
+      return {ok: false, error: '无法解析 Jira transitions 响应'};
+    }
+  } else {
+    const detail = jiraSearchErrorDetail(res.status, res.text);
+    return {ok: false, error: `无法读取可用过渡（HTTP ${res.status}）：${detail}`};
+  }
+
+  let chosen: JiraTransitionOption | undefined;
+  if (explicitId) {
+    chosen = transitions.find((t) => t.id === explicitId);
+    if (!chosen) {
+      return {
+        ok: false,
+        error: `环境变量 JIRA_SUBMIT_TEST_TRANSITION_ID=${explicitId} 不在当前工单的可用过渡列表中`,
+        availableTransitions: transitions,
+      };
+    }
+  } else {
+    chosen = pickSubmitTestTransition(transitions, candidateNames);
+    if (!chosen) {
+      return {
+        ok: false,
+        error: `未找到与「${candidateNames.join(' / ')}」匹配的过渡，请设置 JIRA_SUBMIT_TEST_TRANSITION_ID 或调整 JIRA_SUBMIT_TEST_TRANSITION_NAMES`,
+        availableTransitions: transitions,
+      };
+    }
+  }
+
+  const postBody = {transition: {id: chosen.id}};
+  let postRes = await jiraIssueTransitionsRequest(
+    cfg.baseUrl,
+    apiPrefix,
+    cfg.authHeader,
+    issueKey,
+    'POST',
+    postBody
+  );
+
+  if (
+    !postRes.ok &&
+    (postRes.status === 404 || postRes.status === 410) &&
+    !userSetJiraRestPathPrefixLocal(env) &&
+    apiPrefix === 'rest/api/3'
+  ) {
+    postRes = await jiraIssueTransitionsRequest(
+      cfg.baseUrl,
+      'rest/api/2',
+      cfg.authHeader,
+      issueKey,
+      'POST',
+      postBody
+    );
+    apiPrefix = 'rest/api/2';
+  }
+
+  if (!postRes.ok) {
+    const detail = jiraSearchErrorDetail(postRes.status, postRes.text);
+    return {
+      ok: false,
+      error: `执行过渡失败（HTTP ${postRes.status}）：${detail}`,
+      availableTransitions: transitions,
+    };
+  }
+
+  return {ok: true, transitionId: chosen.id, transitionName: chosen.name};
+}

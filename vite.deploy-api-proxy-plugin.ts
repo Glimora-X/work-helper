@@ -7,7 +7,16 @@ import http from 'node:http';
 import path from 'node:path';
 import type { Connect, Plugin } from 'vite';
 
-const API_PREFIXES = ['/api/deploy', '/api/startup', '/api/local-skills', '/api/jira'] as const;
+const API_PREFIXES = [
+  '/api/deploy',
+  '/api/startup',
+  '/api/local-skills',
+  '/api/local-mcp',
+  '/api/local-models',
+  '/api/assistant',
+  '/api/knowledge',
+  '/api/jira',
+] as const;
 
 const HOP_BY_HOP_REQ = new Set([
   'connection',
