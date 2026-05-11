@@ -26,8 +26,8 @@ export default defineConfig(({mode, command}) => {
     },
     includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
     manifest: {
-      name: '助手',
-      short_name: '助手',
+      name: 'Dottie-Assistant',
+      short_name: 'Dottie-Assistant',
       description: '工作助手应用',
       theme_color: '#1e1e2e',
       background_color: '#1e1e2e',

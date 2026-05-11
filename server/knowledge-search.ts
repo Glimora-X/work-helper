@@ -256,7 +256,7 @@ async function searchAllHttpBridges(query: string, warnings: string[]): Promise<
   return merged;
 }
 
-/** 在配置的本地目录与可选 Wiki HTTP 模板中检索，供助手注入上下文 */
+/** 在配置的本地目录与可选 Wiki HTTP 模板中检索，供Dottie-Assistant注入上下文 */
 export async function searchKnowledge(query: string): Promise<KnowledgeSearchResult> {
   const warnings: string[] = [];
   const hits: KnowledgeHit[] = [];

@@ -383,3 +383,66 @@ html.electron-float-mode #root {
   background: transparent !important;
   box-shadow: none;
 }
+
+/* Electron 桌面浮标（/electron-float）——改外观/尺寸主要改下面 .float-dock-* 一段 */
+/* 拖动由 FloatDock 里 pointer + IPC（floatDragDelta）实现，此处不用 -webkit-app-region（panel/透明窗上易失效） */
+.float-dock-root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  cursor: grab;
+}
+
+.float-dock-root.float-dock--dragging {
+  cursor: grabbing;
+}
+
+.float-dock-ring {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.float-dock-hit {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f6f360;
+  box-shadow:
+    0 4px 14px rgba(234, 196, 2, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.35) inset;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.float-dock-hit:hover {
+  transform: scale(1.04);
+  box-shadow:
+    0 6px 18px rgba(234, 196, 2, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.45) inset;
+}
+
+.float-dock-hit:active {
+  transform: scale(0.98);
+}
+
+.float-dock-hit img {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  pointer-events: none;
+}

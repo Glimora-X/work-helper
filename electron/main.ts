@@ -5,6 +5,9 @@ import net from 'node:net';
 import {execSync} from 'node:child_process';
 import path from 'node:path';
 
+/** `~/Library/Application Support/<此名>`；package.json 的 name 为 react-example，不设则目录会变成 react-example */
+app.name = 'Dottie-Assistant';
+
 let mainWindow: BrowserWindow | null = null;
 let floatWindow: BrowserWindow | null = null;
 let apiChild: UtilityProcess | null = null;
@@ -31,6 +34,18 @@ function showOrCreateMainWindow(): void {
 
 ipcMain.on('assistant:open-main', () => {
   showOrCreateMainWindow();
+});
+
+ipcMain.on('assistant-float-drag', (_e, payload: unknown) => {
+  if (!floatWindow || floatWindow.isDestroyed()) return;
+  if (!payload || typeof payload !== 'object') return;
+  const rec = payload as {dx?: unknown; dy?: unknown};
+  const dx = Number(rec.dx);
+  const dy = Number(rec.dy);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  if (dx === 0 && dy === 0) return;
+  const [x, y] = floatWindow.getPosition();
+  floatWindow.setPosition(Math.round(x + dx), Math.round(y + dy));
 });
 
 const API_PORT = Number(process.env.DEPLOY_API_PORT || 8787);
@@ -145,6 +160,7 @@ async function startBundledApi(): Promise<void> {
     };
 
     // utilityProcess.fork 在打包后无需 RunAsNode fuse，是 Electron 22+ 推荐的子进程方案
+    const assistantDotenvPath = path.join(app.getPath('userData'), '.env');
     const child = utilityProcess.fork(path.resolve(apiScript), [], {
       env: {
         ...process.env,
@@ -152,6 +168,8 @@ async function startBundledApi(): Promise<void> {
         SERVE_SPA_ROOT: path.resolve(spaRoot),
         DEPLOY_PROJECT_CONFIG_PATH: path.resolve(configPath),
         DEPLOY_API_PORT: String(API_PORT),
+        /** deploy-api 在桌面包内会优先读仓库式 .env，不存在时再读此路径（与项目根 .env 二选一即可） */
+        ASSISTANT_DOTENV_PATH: assistantDotenvPath,
       },
       cwd: path.resolve(root),
       stdio: 'pipe',
@@ -206,7 +224,7 @@ function createWindow(): void {
     height: 840,
     minWidth: 900,
     minHeight: 600,
-    title: '助手',
+    title: 'Dottie-Assistant',
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -271,7 +289,7 @@ function createFloatWindow(): void {
     alwaysOnTop: true,
     focusable: true,
     show: false,
-    ...(process.platform === 'darwin' ? ({type: 'panel'} as const) : {}),
+    /** 不设 type:panel：与透明无边框组合时 macOS 上 CSS drag 区域常失效，浮标改由渲染进程 IPC 拖动 */
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -317,7 +335,7 @@ async function ready(): Promise<void> {
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    void dialog.showErrorBox('助手', `无法启动或连接后端：\n${msg}`);
+    void dialog.showErrorBox('Dottie-Assistant', `无法启动或连接后端：\n${msg}`);
     app.quit();
     return;
   }

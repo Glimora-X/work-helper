@@ -45,7 +45,18 @@ export function resolveJiraAuth(env: NodeJS.ProcessEnv = process.env): JiraAuthC
   const user = jiraUser || (pass || token ? jenkinsUser : undefined);
 
   if (!baseUrl) {
-    return { ok: false, reason: '缺少 JIRA_SERVER_URL' };
+    if (rawBase) {
+      return {
+        ok: false,
+        reason:
+          'JIRA_SERVER_URL 存在但解析后为空（请检查是否多空格、引号/逗号误写进值里，勿使用 JSON 行尾逗号样式）',
+      };
+    }
+    return {
+      ok: false,
+      reason:
+        '缺少 JIRA_SERVER_URL（若只在项目根 .env 里配置：桌面包默认不会读取该路径，请复制到应用用户数据目录下的 .env、或设置环境变量 DEPLOY_API_DOTENV 指向该文件）',
+    };
   }
 
   if (!user) {

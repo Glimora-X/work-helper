@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "Dottie-Assistant",
   "private": true,
   "version": "0.0.0",
   "description": "工作助手（部署 / 启动 / 自动化 / 待办）",
@@ -58,7 +58,7 @@
   },
   "build": {
     "appId": "com.local.assistant",
-    "productName": "助手",
+    "productName": "Dottie-Assistant",
     "electronDist": "node_modules/electron/dist",
     "icon": "public/app-logo-square.png",
     "directories": {

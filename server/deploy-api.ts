@@ -41,11 +41,41 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { moduleDirname } from './module-dirname';
 
-/** 与 `tsx server/deploy-api.ts` 的脚本位置相对定位项目根 `.env`，避免 cwd 非仓库根时读不到配置 */
-const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
-config({ path: envPath });
+/**
+ * 解析要加载的 `.env` 路径（只使用第一个存在的文件）。
+ * - 开发：`dist-electron` 或 `server` 的上一级即仓库根
+ * - 桌面包：`api.cjs` 旁通常没有你的开发用 `.env`，Electron 会注入 `ASSISTANT_DOTENV_PATH`（用户数据目录）
+ * - 任意位置：可设 `DEPLOY_API_DOTENV` 绝对路径
+ */
+function resolveDeployApiDotenvPath(): string | null {
+  const explicit = process.env.DEPLOY_API_DOTENV?.trim();
+  if (explicit) {
+    const abs = path.resolve(explicit);
+    if (fs.existsSync(abs)) return abs;
+  }
+  const repoStyle = path.join(moduleDirname(), '..', '.env');
+  if (fs.existsSync(repoStyle)) return path.resolve(repoStyle);
+  const besideApi = path.join(moduleDirname(), '.env');
+  if (fs.existsSync(besideApi)) return path.resolve(besideApi);
+  const assistant = process.env.ASSISTANT_DOTENV_PATH?.trim();
+  if (assistant) {
+    const absA = path.resolve(assistant);
+    if (fs.existsSync(absA)) return absA;
+  }
+  return null;
+}
+
+const envPath = resolveDeployApiDotenvPath();
+if (envPath) {
+  config({ path: envPath });
+} else if (!process.env.JIRA_SERVER_URL?.trim()) {
+  console.warn(
+    '[deploy-api] 未找到 .env 文件（已尝试 DEPLOY_API_DOTENV、<api 上一级>/.env、<api 同目录>/.env、ASSISTANT_DOTENV_PATH）。' +
+      'Jira 等变量将仅来自当前进程环境；桌面包请将含 JIRA_* 的 .env 放到用户数据目录，或设置 DEPLOY_API_DOTENV。',
+  );
+}
 
 const app = express();
 app.use(express.json());
@@ -945,7 +975,7 @@ app.get('/api/assistant/options', (_req, res) => {
   }
 });
 
-/** 仅检索知识库（本地目录 + Confluence + 多路 HTTP 桥），供助手或「预览来源」 */
+/** 仅检索知识库（本地目录 + Confluence + 多路 HTTP 桥），供Dottie-Assistant或「预览来源」 */
 app.post('/api/knowledge/search', async (req, res) => {
   const q = String(req.body?.query ?? '').trim();
   if (!q) {
@@ -961,7 +991,7 @@ app.post('/api/knowledge/search', async (req, res) => {
   }
 });
 
-/** Artistic 助手对话（Ollama 本机 / Gemini 云端 + 可选知识库注入） */
+/** Artistic Dottie-Assistant对话（Ollama 本机 / Gemini 云端 + 可选知识库注入） */
 app.post('/api/assistant/chat', async (req, res) => {
   const body = req.body as AssistantChatRequestBody;
   const messages = Array.isArray(body?.messages) ? body.messages : [];

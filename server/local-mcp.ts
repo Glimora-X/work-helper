@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {moduleDirname} from './module-dirname';
 
 export type McpConfigKind = 'cursor-user' | 'cursor-project';
 
@@ -70,7 +70,7 @@ function parseMcpFile(
 
 export function scanLocalMcp(): ScanLocalMcpResult {
   const home = path.resolve(os.homedir());
-  const repoRoot = path.resolve(path.join(path.dirname(fileURLToPath(import.meta.url)), '..'));
+  const repoRoot = path.resolve(path.join(moduleDirname(), '..'));
   const configsTried: ScanLocalMcpResult['configsTried'] = [];
   const servers: LocalMcpServerEntry[] = [];
   const warnings: string[] = [];

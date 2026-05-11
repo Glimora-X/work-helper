@@ -24,7 +24,7 @@ export interface AssistantChatResponse {
   warnings: string[];
 }
 
-const SYSTEM_ZH = `你是企业内部「工作助手」对话智能体。请用简体中文回答。
+const SYSTEM_ZH = `你是企业内部「工作Dottie-Assistant」对话智能体。请用简体中文回答。
 要求：条理清晰，先结论后要点；若下方提供了「知识库片段」，须优先依据片段做归纳与引用说明；若片段不足以回答，须明确说明并给出可执行的下一步建议。不要编造片段中不存在的事实。`;
 
 function buildKnowledgeBlock(hits: KnowledgeHit[]): string {

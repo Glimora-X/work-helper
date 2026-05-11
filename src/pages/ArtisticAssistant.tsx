@@ -203,7 +203,7 @@ export default function ArtisticAssistant() {
       <div className="artistic-assistant__inner">
         <PageHeader
           icon={Sparkles}
-          title="Artistic 助手"
+          title="Artistic Dottie-Assistant"
           subtitle="对话 + 可选知识库检索；模型在下方一项里选好即可（Gemini / GPT / 本机 Ollama）。需运行 deploy-api。"
         />
 
@@ -233,7 +233,7 @@ export default function ArtisticAssistant() {
         <div className="artistic-assistant__messages" role="log" aria-live="polite" aria-relevant="additions">
           {messages.length === 0 ? (
             <div className="artistic-assistant__empty">
-              例如提问：「搜索单据记忆的设计」—— 勾选「检索知识库」后，助手会先在配置的目录与 Wiki 中检索相关片段，再给出归纳总结。
+              例如提问：「搜索单据记忆的设计」—— 勾选「检索知识库」后，Dottie-Assistant会先在配置的目录与 Wiki 中检索相关片段，再给出归纳总结。
             </div>
           ) : (
             messages.map((msg) => (
@@ -241,7 +241,7 @@ export default function ArtisticAssistant() {
                 key={msg.id}
                 className={`artistic-assistant__bubble artistic-assistant__bubble--${msg.role}`}
               >
-                <div className="artistic-assistant__role">{msg.role === 'user' ? '你' : '助手'}</div>
+                <div className="artistic-assistant__role">{msg.role === 'user' ? '你' : 'Dottie-Assistant'}</div>
                 <div className="artistic-assistant__body">{msg.content}</div>
                 {msg.role === 'assistant' && msg.knowledgeHits?.length ? (
                   <details className="artistic-assistant__sources">
@@ -262,7 +262,7 @@ export default function ArtisticAssistant() {
           )}
           {loading ? (
             <div className="artistic-assistant__bubble artistic-assistant__bubble--assistant" aria-busy="true">
-              <div className="artistic-assistant__role">助手</div>
+              <div className="artistic-assistant__role">Dottie-Assistant</div>
               <div className="artistic-assistant__body">正在思考…</div>
             </div>
           ) : null}

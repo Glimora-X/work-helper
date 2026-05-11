@@ -106,7 +106,7 @@ export function buildWeeklySummaryMarkdown(
   }
   lines.push('');
   lines.push('---');
-  lines.push('*以上内容由助手根据 Jira 数据自动生成，可按需润色后发送。*');
+  lines.push('*以上内容由Dottie-Assistant根据 Jira 数据自动生成，可按需润色后发送。*');
 
   return lines.join('\n');
 }

@@ -563,7 +563,7 @@ export default function Automations() {
 
             <div className="p-6 pt-0">
               <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                向 AI 助手描述您希望自动执行的任务、触发的时间和需要连接到的数据源，系统会立刻为您编排。
+                向 AI Dottie-Assistant描述您希望自动执行的任务、触发的时间和需要连接到的数据源，系统会立刻为您编排。
               </p>
               <textarea
                 value={prompt}
