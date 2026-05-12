@@ -1,39 +1,55 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Dottie-Assistant
 
-# Run and deploy your AI Studio app
+本地工作助手：Jenkins 部署触发、Jira 联动、自动化与待办等能力；前端为 **React + Vite**，桌面端为 **Electron**，部署相关逻辑在 **Express（deploy-api）** 中执行，避免把令牌暴露给浏览器。
 
-This contains everything you need to run your app locally.
+## 环境要求
 
-View your app in AI Studio: https://ai.studio/apps/09cc7119-e39d-4a69-a312-3e5a2f32ac6b
+- **Node.js**：建议 **22**（`npm run dev` 等脚本会通过 nvm 切到 22；未使用 nvm 时请自行保证版本一致）。
+- **操作系统**：当前 `dev` / `dist` 脚本偏 **macOS**（bash + nvm 路径）；其它平台需按需调整脚本或手动执行等价命令。
 
-## Run Locally
+## 快速开始
 
-**Prerequisites:**  Node.js
+1. 安装依赖：
 
+   ```bash
+   npm install
+   ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2. 在项目根目录准备环境变量：复制 [.env.example](.env.example) 为 `.env` 或 `.env.local`（Vite 会加载根目录下的标准 env 文件），至少配置：
 
-## Jenkins 部署配置说明
+   - **`GEMINI_API_KEY`**：调用 Gemini 时使用。
+   - **Jenkins**：`JENKINS_USER`、`JENKINS_TOKEN`（服务端使用，勿提交仓库）。
+   - 按需配置 **Jira**、知识库、GPT/Ollama 等（见 `.env.example` 内注释）。
 
-项目通过 `config/deploy-projects.json` 配置 Jenkins 部署任务。
+3. 启动开发：
 
-### 1. 路径生成逻辑
-系统会自动拼接 `jenkinsBaseUrl` 和 `jobPath` 来生成最终的 Jenkins 任务 URL。
+   | 命令 | 说明 |
+   |------|------|
+   | `npm run dev` | 并行启动 Vite（默认 `:3000`）与 deploy-api（默认 `8787`，端口冲突时会写入根目录 `.deploy-api-port`，代理会跟读）。 |
+   | `npm run dev:desktop` | 桌面开发：Vite + deploy-api + Electron（会等待前端与 `/api/deploy/health` 就绪）。 |
+   | `npm run dev:vite-only` | 仅前端，不启 deploy-api。 |
 
-- **基础 URL**: 取自 `defaults.jenkinsBaseUrl` 或项目内的 `jenkinsBaseUrl`。
-- **任务路径**: `jobPath` 定义了任务在 Jenkins 中的位置。
-- **生成规则**: `jenkinsBaseUrl + /job/ + jobPath`。如果 `jobPath` 包含层级（如 `folder/job`），系统会自动在层级间插入 `/job/`。
+4. 类型检查与测试：
 
-#### 示例
-若要连接到：`https://jenkins.rd.chanjet.com/job/BUILD-to-HSY_PRETEST__saas-cc-web`
+   ```bash
+   npm run lint
+   npm test
+   ```
 
-配置如下：
+## Jenkins 与项目映射
+
+任务列表与默认分支等由 [config/deploy-projects.json](config/deploy-projects.json) 维护。
+
+### URL 如何拼接
+
+- **基础地址**：`defaults.jenkinsBaseUrl`，或项目级覆盖的 `jenkinsBaseUrl`。
+- **任务路径**：各项目的 `jobPath`（Jenkins 中的 job 名或层级路径）。
+- **规则**：在基础 URL 后按 Jenkins 路径规则插入 `/job/`；若 `jobPath` 含多级（如 `folder/sub/job`），会在段之间自动补上 `/job/`。
+
+示例：访问  
+`https://jenkins.rd.chanjet.com/job/BUILD-to-HSY_PRETEST__saas-cc-web`  
+对应配置片段：
+
 ```json
 {
   "defaults": {
@@ -47,24 +63,28 @@ View your app in AI Studio: https://ai.studio/apps/09cc7119-e39d-4a69-a312-3e5a2
 }
 ```
 
-### 2. 连接与认证
-- **认证**: 使用 Basic Auth (用户名 + API Token)。
-- **安全**: 系统会自动获取并携带 `Jenkins-Crumb` (CSRF Token)。
-- **触发**: 通过 POST 请求触发 `/buildWithParameters` 或 `/build` 接口。
+### 连接与安全
 
-打包：日常 dir，分发再 zip（package.json）
-脚本	行为
-npm run dist:dir
-build:desktop → electron-builder --dir --mac，只出 release/mac-arm64 目录，适合日常调试。
-npm run dist
-build:desktop → electron-builder --mac zip，只打 zip（分发用，会慢一些）。
-build.mac.target 默认只保留 ["dir"]，避免一次命令里又打 dir 又打 zip。
-若以后要「一次打出 dir + zip」，可再加脚本，例如：electron-builder --mac dir zip。
-提醒：改过 dist 含义后，日常调试请用 npm run dist:dir；要发给别人安装包时用 npm run dist 打 zip。
+- **认证**：HTTP Basic（用户名 + API Token）。
+- **CSRF**：请求前会获取并携带 `Jenkins-Crumb`。
+- **触发**：向 `/buildWithParameters` 或 `/build` 发起 POST。
 
-图片是竖版（非正方形），强制缩成正方形图标时就会压扁变形。解决方法是把它"填充到正方形画布"：图标主体居中，四周补透明（或背景色）留边距。
+未配置 Jenkins 凭据时，相关接口会返回 **503**（见 `.env.example` 说明）。
 
-直接用 macOS 自带的 sips 命令处理即可，不需要任何额外软件：
+## 桌面端构建与分发
 
+先执行 `build:desktop`（Vite 打客户端包 + 编译 Electron 主进程），再由 electron-builder 产出安装介质。
 
-cd /Users/juanwang/Documents/work-space/owner/Dottie-Assistant/public && sips --padToHeightWidth 1024 1024 --padColor FFFFFF app-logo.png --out app-logo-square.png && sips -g pixelWidth -g pixelHeight app-logo-square.png
+| 命令 | 行为 |
+|------|------|
+| `npm run dist:dir` | `electron-builder --dir --mac`：生成 `release/` 下目录（如 `mac-arm64`），适合本机调试。 |
+| `npm run dist` | `electron-builder --mac zip`：**仅打 zip**，便于分发；比 dir 慢。 |
+
+说明：`package.json` 里 `build.mac.target` 默认只有 `["dir"]`，是为了避免单次构建同时产出多种目标；**zip 由 `npm run dist` 显式传入 `--mac zip` 完成**。若需要「一次打出 dir + zip」，可自行增加脚本，例如：`electron-builder --mac dir zip`。
+
+**习惯用法**：日常调试用 `npm run dist:dir`；对外发安装包用 `npm run dist`。
+
+## 其它
+
+- 更细的环境变量说明（Jira 前缀、代理、桌面包 `.env` 路径等）见 [.env.example](.env.example)。
+- 可选部署配置路径：`DEPLOY_PROJECT_CONFIG_PATH`（默认 `config/deploy-projects.json`）。

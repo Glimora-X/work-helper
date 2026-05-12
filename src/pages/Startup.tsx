@@ -39,24 +39,57 @@ interface ProfileRunState {
 
 const INITIAL_PROFILES: StartupProfile[] = [
   {
-    id: 'p1',
-    title: '单体应用 (cc-web)',
+    id: 'saas-cc-web',
+    title: 'saas-cc-web',
     description: '独立启动单个前端核心工程',
     type: 'single',
     ide: 'cursor',
     projects: [
-      { id: '1', name: 'cc-web', path: '~/Documents/work-space/web/saas-cc-web', branch: 'sprint-260423', installCmd: 'yarn', runCmd: 'yarn dev' }
+      { id: '1', name: 'cc-web', path: '~/Documents/work-space/web/saas-cc-web', branch: 'test-260423', installCmd: 'yarn', runCmd: 'yarn dev' }
     ]
   },
   {
-    id: 'p2',
-    title: '微前端主子空间 (主干+依赖)',
+    id: 'saas-cc-node',
+    title: 'saas-cc-node',
+    description: '独立启动单个前端核心工程',
+    type: 'single',
+    ide: 'cursor',
+    projects: [
+      { id: '1', name: 'cc-node', path: '~/Documents/work-space/node/saas-cc-node', branch: 'test-260423', installCmd: 'yarn', runCmd: 'yarn run test' }
+    ]
+  },
+  {
+    id: 'app-service-plus',
+    title: 'app-service-plusb',
+    description: '独立启动',
+    type: 'single',
+    ide: 'cursor',
+    projects: [
+      { id: '1', name: 'app-service-plus', path: ' ~/Documents/work-space/third/cc-front-biz-app-service-plus', branch: 'test-260423', installCmd: 'yarn', runCmd: 'yarn dev' }
+    ]
+  },
+  {
+    id: 'app-service-mp',
+    title: 'app-service-mp',
+    description: '独立启动',
+    type: 'single',
+    ide: 'cursor',
+    projects: [
+      { id: '1', name: 'app-service-mp', path: ' ~/Documents/work-space/mdf/cc-front-biz-app-service-mp', branch: 'test-260423', installCmd: 'yarn', runCmd: 'yarn dev' }
+    ]
+  },
+  {
+    id: 'mdf',
+    title: '低代码',
     description: '核心库开启 watch，主应用开启 dev',
     type: 'workspace',
     ide: 'cursor',
     projects: [
-      { id: '1', name: 'biz-core', path: '~/projects/biz-core', branch: 'feat/JIRA-1002', installCmd: 'yarn', runCmd: 'yarn w' },
-      { id: '2', name: 'cc-web', path: '~/projects/cc-web', branch: 'feat/JIRA-1002', installCmd: 'yarn', runCmd: 'yarn dev' }
+      { id: '1', name: 'ui-web', path: '~/Documents/work-space/mdf/chanjet-mdf-ui-web', branch: 'test', installCmd: 'yarn', runCmd: 'yarn w' },
+      { id: '2', name: 'biz-service', path: '~/Documents/work-space/mdf/chanjet-mdf-biz-service', branch: 'test', installCmd: 'yarn', runCmd: 'yarn w' },
+      { id: '3', name: 'mdf', path: '~/Documents/work-space/mdf/chanjet-mdf', branch: 'test', installCmd: 'yarn', runCmd: 'yarn w' },
+      { id: '4', name: 'biz', path: '~/Documents/work-space/mdf/chanjet-mdf-biz', branch: 'test', installCmd: 'yarn', runCmd: 'yarn w' },
+      { id: '4', name: 'metapage', path: '~/Documents/work-space/mdf/saas-cc-web-metapage', branch: 'test-260423', installCmd: 'yarn', runCmd: 'yarn dev' }
     ]
   },
   {
@@ -64,7 +97,7 @@ const INITIAL_PROFILES: StartupProfile[] = [
     title: '全栈微服务 (API + Web)',
     description: '所有子工程同步拉取并全量开启 dev',
     type: 'workspace',
-    ide: 'code',
+    ide: 'cursor',
     projects: [
       { id: '1', name: 'auth-service', path: '~/projects/auth-service', branch: 'develop', installCmd: 'yarn', runCmd: 'yarn dev' },
       { id: '2', name: 'user-center', path: '~/projects/user-center', branch: 'develop', installCmd: 'yarn', runCmd: 'yarn dev' },

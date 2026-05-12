@@ -373,20 +373,21 @@ code, pre, .font-mono {
   letter-spacing: 0.02em;
 }
 
-/* Electron 桌面浮标窗口：透明背景 */
+/* Electron 桌面浮标窗口：macOS 上全透明像素常不命中指针，需极淡底色才能拖到（肉眼几乎看不出） */
 html.electron-float-mode,
 html.electron-float-mode body,
 html.electron-float-mode #root {
   margin: 0;
   min-height: 100%;
   overflow: hidden;
-  background: transparent !important;
+  background: rgba(0, 0, 0, 0.02) !important;
   box-shadow: none;
 }
 
 /* Electron 桌面浮标（/electron-float）——改外观/尺寸主要改下面 .float-dock-* 一段 */
 /* 拖动由 FloatDock 里 pointer + IPC（floatDragDelta）实现，此处不用 -webkit-app-region（panel/透明窗上易失效） */
 .float-dock-root {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 100%;
@@ -397,10 +398,38 @@ html.electron-float-mode #root {
   -webkit-user-select: none;
   touch-action: none;
   cursor: grab;
+  /* 与 #root 一样：保证整窗可命中（否则只有中间实心圆能点到） */
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .float-dock-root.float-dock--dragging {
   cursor: grabbing;
+}
+
+/* ?floatDebug=1 时：浮标窗内调试用（勿依赖正式 UI） */
+.float-dock-debug {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  font-size: 9px;
+  line-height: 1.25;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: rgba(0, 0, 0, 0.75);
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 4px;
+  padding: 3px 4px;
+  pointer-events: none;
+  max-height: 38px;
+  overflow: hidden;
+}
+
+.float-dock-debug-line {
+  opacity: 0.9;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .float-dock-ring {
@@ -409,6 +438,7 @@ html.electron-float-mode #root {
   border-radius: 50%;
   padding: 10px;
   box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .float-dock-hit {

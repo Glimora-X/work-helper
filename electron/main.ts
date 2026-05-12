@@ -289,6 +289,8 @@ function createFloatWindow(): void {
     alwaysOnTop: true,
     focusable: true,
     show: false,
+    /** macOS：可叠在全屏应用之上（与 setVisibleOnAllWorkspaces 配合） */
+    ...(process.platform === 'darwin' ? {visibleOnFullScreen: true} : {}),
     /** 不设 type:panel：与透明无边框组合时 macOS 上 CSS drag 区域常失效，浮标改由渲染进程 IPC 拖动 */
     webPreferences: {
       preload: preloadPath,
@@ -297,10 +299,6 @@ function createFloatWindow(): void {
       sandbox: false,
     },
   });
-
-  if (process.platform === 'darwin') {
-    floatWindow.setAlwaysOnTop(true, 'floating');
-  }
 
   floatWindow.webContents.setWindowOpenHandler(({url}) => {
     void shell.openExternal(url);
@@ -316,9 +314,25 @@ function createFloatWindow(): void {
     ]).popup({window: floatWindow});
   });
 
-  void floatWindow.loadURL(`${spaOrigin()}/electron-float`);
+  const floatQuery =
+    process.env.ELECTRON_FLOAT_DEBUG === '1' || useViteDevServer ? '?floatDebug=1' : '';
+  void floatWindow.loadURL(`${spaOrigin()}/electron-float${floatQuery}`);
   floatWindow.once('ready-to-show', () => {
-    floatWindow?.show();
+    if (!floatWindow || floatWindow.isDestroyed()) return;
+    floatWindow.show();
+    if (useViteDevServer || process.env.ELECTRON_FLOAT_DEBUG === '1') {
+      floatWindow.webContents.openDevTools({mode: 'detach'});
+    }
+    /**
+     * 尽量浮在普通应用之上：macOS 用 screen-saver 层级 + 全屏上可见；
+     * Windows 亦设 screen-saver（Electron 支持的置顶档）。
+     */
+    if (process.platform === 'darwin') {
+      floatWindow.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
+      floatWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+    } else {
+      floatWindow.setAlwaysOnTop(true, 'screen-saver');
+    }
   });
 
   floatWindow.on('closed', () => {
