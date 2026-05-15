@@ -9,3 +9,4 @@ coverage/
 .env*
 !.env.example
 .deploy-api-port
+.deploy-pipeline-stats.json

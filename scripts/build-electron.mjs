@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 const outDir = path.join(root, 'dist-electron');
 
-fs.rmSync(outDir, {recursive: true, force: true});
+/** 勿整目录 rm：否则 dev 时每次编译会删掉已拷入的 dist-electron/dist；只保证目录存在 */
 fs.mkdirSync(outDir, {recursive: true});
 
 const esbuildNode = {

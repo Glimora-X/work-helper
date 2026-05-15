@@ -19,6 +19,12 @@ import {
   loadDeployProjectConfig,
   resolveDeployTargets,
 } from './deploy-project-config';
+import {
+  getDeployPipelineRun,
+  getDeployPipelineRunSnapshot,
+  getPipelineTaskStatsSorted,
+  startDeployPipelineRun,
+} from './deploy-pipeline';
 import { scanLocalSkills } from './local-skills';
 import { scanLocalMcp } from './local-mcp';
 import { scanLocalModels } from './local-models';
@@ -41,31 +47,20 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { moduleDirname } from './module-dirname';
-
-/**
- * 解析要加载的 `.env` 路径（只使用第一个存在的文件）。
- * - 开发：`dist-electron` 或 `server` 的上一级即仓库根
- * - 桌面包：`api.cjs` 旁通常没有你的开发用 `.env`，Electron 会注入 `ASSISTANT_DOTENV_PATH`（用户数据目录）
- * - 任意位置：可设 `DEPLOY_API_DOTENV` 绝对路径
- */
-function resolveDeployApiDotenvPath(): string | null {
-  const explicit = process.env.DEPLOY_API_DOTENV?.trim();
-  if (explicit) {
-    const abs = path.resolve(explicit);
-    if (fs.existsSync(abs)) return abs;
-  }
-  const repoStyle = path.join(moduleDirname(), '..', '.env');
-  if (fs.existsSync(repoStyle)) return path.resolve(repoStyle);
-  const besideApi = path.join(moduleDirname(), '.env');
-  if (fs.existsSync(besideApi)) return path.resolve(besideApi);
-  const assistant = process.env.ASSISTANT_DOTENV_PATH?.trim();
-  if (assistant) {
-    const absA = path.resolve(assistant);
-    if (fs.existsSync(absA)) return absA;
-  }
-  return null;
-}
+import {
+  ASSISTANT_ENV_UI_KEYS,
+  isSecretEnvKey,
+  loadProjectCatalog,
+  mergeEnvFileContent,
+  parseEnvValues,
+  projectCatalogPath,
+  readEnvFileIfExists,
+  resolveDeployApiDotenvPath,
+  resolveWritableDotenvPath,
+  saveProjectCatalog,
+  type ProjectCatalogEntry,
+  writeEnvFile,
+} from './assistant-workspace-config';
 
 const envPath = resolveDeployApiDotenvPath();
 if (envPath) {
@@ -238,12 +233,13 @@ function attachDevStreamToRun(
   label: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const effectiveCmd = wrapUserCmdWithLoginShell(cmd);
     pushStartupLog(
       run,
-      `[${label}] 流式输出: ${cmd}（无 stdin/TTY；需「按领域」交互时请开 openDevInTerminal 或改用非交互参数）`,
+      `[${label}] 流式输出: ${effectiveCmd}（登录 shell；无 stdin/TTY；需「按领域」交互时请开 openDevInTerminal 或改用非交互参数）`,
       'info'
     );
-    const child = spawn(cmd, {
+    const child = spawn(effectiveCmd, {
       cwd,
       shell: true,
       detached: true,
@@ -353,6 +349,18 @@ function expandPath(p: string): string {
 /** Bash 单引号安全包裹（用于生成的 .command 脚本） */
 function bashSingleQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * 非 Windows：用 `bash -lc` 执行用户配置的命令，以加载登录 shell 的 PATH（如 ~/.profile、~/.bash_profile 中的 nvm/yarn）。
+ * 已为 `bash -lc ...` 时不再重复包裹。
+ */
+function wrapUserCmdWithLoginShell(command: string): string {
+  const t = command.trim();
+  if (!t || t === 'none') return t;
+  if (process.platform === 'win32') return t;
+  if (/^bash\s+-lc\s+/i.test(t)) return t;
+  return `bash -lc ${bashSingleQuote(t)}`;
 }
 
 /**
@@ -523,9 +531,10 @@ async function executeStartupLaunch(
       pushStartupLog(run, `[${proj.name}] 将执行安装（${reasons.join('；')}）`, 'info');
     }
 
-    pushStartupLog(run, `[${proj.name}] Executing: ${installCmd}`);
+    const installEffective = wrapUserCmdWithLoginShell(installCmd);
+    pushStartupLog(run, `[${proj.name}] Executing: ${installEffective}`);
     try {
-      await runStartupShellStep(run, proj.name, expandedPath, installCmd);
+      await runStartupShellStep(run, proj.name, expandedPath, installEffective);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       pushStartupLog(
@@ -975,6 +984,111 @@ app.get('/api/assistant/options', (_req, res) => {
   }
 });
 
+/** 启动页「工程目录」目录：名称 → 本地路径 */
+app.get('/api/assistant/project-catalog', (_req, res) => {
+  try {
+    res.json({ path: projectCatalogPath(), entries: loadProjectCatalog() });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.put('/api/assistant/project-catalog', (req, res) => {
+  try {
+    const entries = req.body?.entries;
+    if (!Array.isArray(entries)) {
+      res.status(400).json({ error: 'body.entries 须为数组' });
+      return;
+    }
+    const cleaned: ProjectCatalogEntry[] = [];
+    for (const e of entries) {
+      if (!e || typeof e.id !== 'string' || typeof e.name !== 'string' || typeof e.path !== 'string') {
+        continue;
+      }
+      const id = e.id.trim();
+      const name = e.name.trim();
+      const p = e.path.trim();
+      if (!id || !name || !p) continue;
+      cleaned.push({ id, name, path: p });
+    }
+    saveProjectCatalog(cleaned);
+    res.json({ ok: true, path: projectCatalogPath(), entries: cleaned });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** 设置页：读取将写入的 .env 中的托管键（密钥不返回明文） */
+app.get('/api/assistant/env-ui', (_req, res) => {
+  try {
+    const readPath = resolveDeployApiDotenvPath() ?? resolveWritableDotenvPath();
+    const writePath = resolveWritableDotenvPath();
+    const raw = readEnvFileIfExists(readPath) ?? '';
+    const parsed = parseEnvValues(raw);
+    const fields: Record<string, { kind: 'plain'; value: string } | { kind: 'secret'; configured: boolean }> = {};
+    for (const k of ASSISTANT_ENV_UI_KEYS) {
+      const v = parsed.get(k) ?? '';
+      if (isSecretEnvKey(k)) {
+        fields[k] = { kind: 'secret', configured: Boolean(v.trim()) };
+      } else {
+        fields[k] = { kind: 'plain', value: v };
+      }
+    }
+    res.json({
+      dotenvReadPath: readPath,
+      dotenvWritePath: writePath,
+      fileExists: fs.existsSync(readPath),
+      fields,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/**
+ * 合并写入 .env（仅允许 ASSISTANT_ENV_UI_KEYS）。
+ * patch 中「空字符串」表示不修改该键；要删除某键可传 removeKeys。
+ */
+app.post('/api/assistant/env-ui', (req, res) => {
+  try {
+    const patch = req.body?.patch;
+    const removeKeysRaw = req.body?.removeKeys;
+    if (patch != null && (typeof patch !== 'object' || Array.isArray(patch))) {
+      res.status(400).json({ error: 'body.patch 须为对象' });
+      return;
+    }
+    const removeKeys = Array.isArray(removeKeysRaw)
+      ? removeKeysRaw.filter((x): x is string => typeof x === 'string')
+      : [];
+    const allowed = new Set<string>([...ASSISTANT_ENV_UI_KEYS]);
+    const updates: Record<string, string> = {};
+    if (patch && typeof patch === 'object') {
+      for (const [key, val] of Object.entries(patch as Record<string, unknown>)) {
+        if (!allowed.has(key)) continue;
+        if (typeof val !== 'string') continue;
+        if (val === '') continue;
+        updates[key] = val;
+      }
+    }
+    const removeFiltered = removeKeys.filter((k) => allowed.has(k));
+    const writePath = resolveWritableDotenvPath();
+    const previous = readEnvFileIfExists(writePath) ?? '';
+    const merged = mergeEnvFileContent(previous, updates, removeFiltered);
+    writeEnvFile(writePath, merged);
+    res.json({
+      ok: true,
+      dotenvWritePath: writePath,
+      hint: '已写入磁盘。正在运行的 deploy-api 仍使用旧环境变量，请重启 npm run dev / deploy-api 后生效。',
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
 /** 仅检索知识库（本地目录 + Confluence + 多路 HTTP 桥），供Dottie-Assistant或「预览来源」 */
 app.post('/api/knowledge/search', async (req, res) => {
   const q = String(req.body?.query ?? '').trim();
@@ -1099,7 +1213,7 @@ app.post('/api/jira/issue/:issueKey/submit-test', async (req, res) => {
       res.status(503).json({ error: r.authError, ok: false });
       return;
     }
-    if (!r.ok) {
+    if (r.ok === false) {
       res.status(400).json({
         error: r.error,
         ok: false,
@@ -1323,6 +1437,81 @@ app.post('/api/deploy/jenkins/build-result', async (req, res) => {
   }
 });
 
+/** 服务端 DAG 编排：启动后返回 runId，日志与节点状态经 SSE 或 GET 快照拉取 */
+app.post('/api/deploy/pipeline/runs/start', (req, res) => {
+  try {
+    const projectIds = parseProjectIdsFromBody(req.body || {});
+    if (!projectIds.length) {
+      res.status(400).json({ error: 'projectIds required' });
+      return;
+    }
+    const jiraId = typeof req.body?.jiraId === 'string' ? req.body.jiraId.trim() : undefined;
+    const branch = typeof req.body?.branch === 'string' ? req.body.branch.trim() : undefined;
+    const started = startDeployPipelineRun({ projectIds, jiraId, branch });
+    if (started.ok === false) {
+      res.status(started.status).json({ error: started.error });
+      return;
+    }
+    res.json({ runId: started.runId });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = e instanceof DeployContractError ? e.status : 500;
+    res.status(status).json({ error: msg });
+  }
+});
+
+app.get('/api/deploy/pipeline/runs/:runId', (req, res) => {
+  const snap = getDeployPipelineRunSnapshot(req.params.runId);
+  if (!snap) {
+    res.status(404).json({ error: 'run not found' });
+    return;
+  }
+  res.json(snap);
+});
+
+app.get('/api/deploy/pipeline/runs/:runId/events', (req, res) => {
+  const run = getDeployPipelineRun(req.params.runId);
+  if (!run) {
+    res.status(404).json({ error: 'run not found' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const afterRaw = Number(req.query.afterIndex);
+  let cursor =
+    Number.isFinite(afterRaw) && afterRaw >= 0
+      ? Math.min(Math.floor(afterRaw), run.events.length)
+      : 0;
+  const timer = setInterval(() => {
+    while (cursor < run.events.length) {
+      const event = run.events[cursor++];
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+    if (run.status === 'completed' || run.status === 'failed') {
+      clearInterval(timer);
+      res.end();
+    }
+  }, 400);
+
+  req.on('close', () => {
+    clearInterval(timer);
+  });
+});
+
+/** 按执行次数排序的流水线任务统计（projectId 逗号分隔为键） */
+app.get('/api/deploy/pipeline/task-stats', (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+    res.json({ entries: getPipelineTaskStatsSorted(limit) });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg, entries: [] });
+  }
+});
 
 app.post('/api/deploy/automation/runs/start', async (req, res) => {
   const taskId = typeof req.body?.taskId === 'string' ? req.body.taskId : '';

@@ -5,8 +5,9 @@
   --aa-radius-sm: 12px;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
   color: var(--text-primary);
   font-family: var(--font-sans);
 }
@@ -126,7 +127,7 @@
 .artistic-assistant__input-model:focus-visible,
 .artistic-assistant__composer:focus-visible {
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12), var(--shadow-card);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary-600) 14%, transparent), var(--shadow-card);
 }
 
 .artistic-assistant__check {
@@ -166,14 +167,14 @@
 
 .artistic-assistant__btn-ghost:hover {
   color: var(--primary);
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: color-mix(in srgb, var(--color-primary-600) 35%, transparent);
   background: var(--bg-hover);
 }
 
 .artistic-assistant__btn-ghost:focus-visible {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary-600) 14%, transparent);
 }
 
 .artistic-assistant__meta {
@@ -184,7 +185,7 @@
 
 .artistic-assistant__messages {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -216,8 +217,12 @@
 
 .artistic-assistant__bubble--user {
   align-self: flex-end;
-  border-color: rgba(59, 130, 246, 0.35);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.06));
+  border-color: color-mix(in srgb, var(--color-primary-600) 35%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary-600) 10%, transparent),
+    color-mix(in srgb, var(--color-accent-secondary) 8%, transparent)
+  );
 }
 
 .artistic-assistant__bubble--assistant {
@@ -330,7 +335,7 @@
   letter-spacing: 0.04em;
   color: #fff;
   background: var(--accent-gradient);
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-primary-600) 28%, transparent);
   transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
@@ -341,7 +346,9 @@
 
 .artistic-assistant__btn-send:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 8px 24px rgba(59, 130, 246, 0.35);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--color-primary-600) 25%, transparent),
+    0 8px 24px color-mix(in srgb, var(--color-primary-600) 28%, transparent);
 }
 
 .artistic-assistant__btn-send:disabled {

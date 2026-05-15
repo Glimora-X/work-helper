@@ -56,6 +56,71 @@ export function parseSkillFrontmatter(content: string): { name?: string; descrip
   };
 }
 
+/** frontmatter 结束后的正文；无闭合 --- 时退回剩余片段；无 frontmatter 时为全文 */
+function getMarkdownBodyAfterFrontmatter(content: string): string {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith('---')) return content.trim();
+  const afterOpen = trimmed.slice(3);
+  const firstNl = afterOpen.indexOf('\n');
+  if (firstNl === -1) return '';
+  const rest = afterOpen.slice(firstNl + 1);
+  const m = /\n---\s*(?:\n|$)/.exec(rest);
+  if (!m) return rest.trim();
+  return rest.slice(m.index + m[0].length).trim();
+}
+
+/**
+ * YAML 未写 description 时，从正文首段抽取可读简介（去标题/粗体/链接等噪声）。
+ */
+export function extractSkillIntroFromMarkdown(content: string, maxLen: number): string {
+  let text = getMarkdownBodyAfterFrontmatter(content);
+  if (!text) return '';
+
+  text = text.replace(/^#{1,6}\s+.+$/gm, '').trim();
+
+  const parts: string[] = [];
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) {
+      if (parts.length > 0) break;
+      continue;
+    }
+    if (line.startsWith('```')) continue;
+    if (line.startsWith('|') && line.includes('|')) continue;
+    if (/^[-]{3,}\s*$/.test(line)) continue;
+    if (/^={3,}\s*$/.test(line)) continue;
+    if (/^#{1,6}\s/.test(line)) continue;
+
+    let chunk = line;
+    if (/^[-*+]\s+/.test(chunk)) chunk = chunk.replace(/^[-*+]\s+/, '');
+    if (/^\d+\.\s+/.test(chunk)) chunk = chunk.replace(/^\d+\.\s+/, '');
+    if (/^>\s?/.test(chunk)) chunk = chunk.replace(/^>\s?/, '');
+
+    chunk = chunk
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/<[^>]+>/g, ' ')
+      .trim();
+
+    if (!chunk) continue;
+    parts.push(chunk);
+    if (parts.join(' ').length >= maxLen) break;
+    if (parts.length >= 10) break;
+  }
+
+  let out = parts.join(' ').replace(/\s+/g, ' ').trim();
+  if (!out) return '';
+  if (out.length > maxLen) {
+    out = out.slice(0, maxLen).trim();
+    const cut = out.lastIndexOf(' ');
+    if (cut > maxLen * 0.65) out = out.slice(0, cut);
+    out += '…';
+  }
+  return out;
+}
+
 function walk(opts: {
   dir: string;
   rootAbs: string;
@@ -92,10 +157,14 @@ function walk(opts: {
         const content = fs.readFileSync(skillFile, 'utf8');
         const fm = parseSkillFrontmatter(content);
         const folderName = path.basename(resolved);
+        let description = (fm.description || '').trim();
+        if (!description) {
+          description = extractSkillIntroFromMarkdown(content, 520);
+        }
         out.push({
           source,
           displayName: fm.name || folderName,
-          description: (fm.description || '').slice(0, 480),
+          description: description.slice(0, 560),
           skillMdPath: skillFile,
           skillDir: resolved,
         });

@@ -1,6 +1,14 @@
-import { useState, useRef, useEffect, type FormEvent, type MouseEvent } from 'react';
-import { Terminal, CheckCircle2, XCircle, Loader2, ArrowRight, Clock, Box, Play, Plus, X, Trash2, Save, FilePlus, Tag, GitBranch, ExternalLink, ShieldAlert, Rocket } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, type FormEvent, type MouseEvent } from 'react';
+import { Terminal, CheckCircle2, XCircle, Loader2, ArrowRight, Clock, Box, Play, Plus, X, Trash2, Save, FilePlus, Tag, GitBranch, ExternalLink, ShieldAlert, Rocket, BarChart2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
+import { extractJiraAndBranch } from '../lib/float-command/deploy-parse-extract';
+import { resolveDeployTemplates } from '../lib/float-command/deploy-template-resolve';
+import { readDeployRecentIdsForResolve, recordDeployTemplateUsed } from '../lib/float-command/recent';
+import { stripDeployVerbs } from '../lib/float-command/text-normalize';
+import {
+  FLOAT_DEPLOY_SESSION_KEY,
+  type FloatDeployConfirmedPayload,
+} from '../lib/float-command/float-deploy-payload';
 
 type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'queued';
 type Phase = 'idle' | 'draft' | 'executing' | 'completed';
@@ -23,10 +31,25 @@ interface LogEntry {
   type: 'info' | 'success' | 'warn' | 'error' | 'system' | 'prompt';
 }
 
+function normalizeDeployLogLevel(level: unknown): LogEntry['type'] {
+  if (level === 'error' || level === 'warn' || level === 'success' || level === 'system' || level === 'prompt') {
+    return level;
+  }
+  return 'info';
+}
+
+type DeployPipelineSseEvent =
+  | { type: 'log'; timestamp: string; payload: { message?: string; level?: string } }
+  | { type: 'nodes'; timestamp: string; payload: { nodes?: DeployNode[] } }
+  | { type: 'completed'; timestamp: string; payload?: Record<string, unknown> }
+  | { type: 'failed'; timestamp: string; payload?: { error?: string } };
+
 interface Template {
   id: string;
   name: string;
   nodes: string[];
+  /** 浮标 / 指令匹配用别名 */
+  keywords?: string[];
 }
 
 interface DeployProjectOption {
@@ -44,16 +67,23 @@ interface DeployHealth {
 }
 
 const INITIAL_TEMPLATES: Template[] = [
-  { id: 'tpl_9', name: 'MDF', nodes: ['mdf', 'saas-cc-web-metapage'] },
-  { id: 'tpl_8', name: 'MDF—BIZ', nodes: ['mdf-biz', 'saas-cc-web-metapage'] },
-  { id: 'tpl_7', name: 'UI-WEB', nodes: ['mdf-ui-web', 'saas-cc-web-metapage'] },
-  { id: 'tpl_11', name: 'BIZ-CORE', nodes: ['biz-core','saas-cc-web','hsy-h5-mainapp'] },
-  { id: 'tpl_12', name: 'SAAS-CC-NODE-METASERVER', nodes: ['saas-cc-node-metaserver', 'saas-cc-node'] },
+  { id: 'tpl_9', name: 'MDF', nodes: ['mdf', 'saas-cc-web-metapage'], keywords: ['mdf', '低代码', 'metapage'] },
+  { id: 'tpl_8', name: 'MDF—BIZ', nodes: ['mdf-biz', 'saas-cc-web-metapage'], keywords: ['biz', 'mdf-biz'] },
+  { id: 'tpl_7', name: 'UI-WEB', nodes: ['mdf-ui-web', 'saas-cc-web-metapage'], keywords: ['ui-web', 'ui web'] },
+  { id: 'tpl_11', name: 'BIZ-CORE', nodes: ['biz-core', 'saas-cc-web', 'hsy-h5-mainapp'], keywords: ['biz-core', '订单', 'biz core'] },
+  {
+    id: 'tpl_12',
+    name: 'SAAS-CC-NODE-METASERVER',
+    nodes: ['saas-cc-node-metaserver', 'saas-cc-node'],
+    keywords: ['node', 'metaserver', 'cc-node'],
+  },
 ];
 
 const DEPLOY_API_BASE =
   ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_DEPLOY_API_BASE ?? '/api/deploy').replace(/\/$/, '') ||
   '/api/deploy';
+
+const DEPLOY_PIPELINE_RUN_KEY = 'deploy_pipeline_active_run_v1';
 
 export default function Deployment() {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -99,10 +129,189 @@ export default function Deployment() {
   const deployProjects = health?.projects || [];
   const projectLabel = (id: string) => deployProjects.find((project) => project.id === id)?.label || id;
 
+  const [taskStats, setTaskStats] = useState<Array<{ taskKey: string; count: number; lastRunAt: string }>>([]);
+  const pipelineEsRef = useRef<EventSource | null>(null);
+  const logSeqRef = useRef(0);
+
+  const closePipelineEventSource = useCallback(() => {
+    if (pipelineEsRef.current) {
+      pipelineEsRef.current.close();
+      pipelineEsRef.current = null;
+    }
+  }, []);
+
+  const fetchTaskStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${DEPLOY_API_BASE}/pipeline/task-stats?limit=25`);
+      const data = (await res.json()) as {
+        entries?: Array<{ taskKey: string; count: number; lastRunAt: string }>;
+      };
+      if (Array.isArray(data.entries)) setTaskStats(data.entries);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const attachPipelineEventSource = useCallback(
+    (runId: string, afterIndex?: number) => {
+      closePipelineEventSource();
+      const qs =
+        afterIndex != null && afterIndex > 0
+          ? `?afterIndex=${encodeURIComponent(String(Math.floor(afterIndex)))}`
+          : '';
+      const es = new EventSource(
+        `${DEPLOY_API_BASE}/pipeline/runs/${encodeURIComponent(runId)}/events${qs}`
+      );
+      pipelineEsRef.current = es;
+      es.onmessage = (ev) => {
+        try {
+          const event = JSON.parse(ev.data) as DeployPipelineSseEvent;
+          if (event.type === 'log') {
+            const msg =
+              typeof event.payload?.message === 'string'
+                ? event.payload.message
+                : JSON.stringify(event.payload ?? {});
+            const type = normalizeDeployLogLevel(event.payload?.level);
+            logSeqRef.current += 1;
+            const id = Date.now() + logSeqRef.current;
+            setLogs((prev) => [...prev, { id, timestamp: event.timestamp, message: msg, type }]);
+            return;
+          }
+          if (event.type === 'nodes' && Array.isArray(event.payload?.nodes)) {
+            setPipeline(event.payload.nodes as DeployNode[]);
+            const running = (event.payload.nodes as DeployNode[]).find((n) => n.status === 'running');
+            setActiveTask(running?.name ?? null);
+            return;
+          }
+          if (event.type === 'completed' || event.type === 'failed') {
+            setActiveTask(null);
+            setPhase('completed');
+            sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+            void fetchTaskStats();
+            closePipelineEventSource();
+          }
+        } catch {
+          /* ignore malformed SSE payload */
+        }
+      };
+      es.onerror = () => {
+        closePipelineEventSource();
+      };
+    },
+    [closePipelineEventSource, fetchTaskStats]
+  );
+
+  useEffect(() => {
+    void fetchTaskStats();
+  }, [fetchTaskStats]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateFromSnapshot = (snap: {
+      nodes?: DeployNode[];
+      events?: Array<{ type: string; timestamp: string; payload?: { message?: string; level?: string } }>;
+    }) => {
+      if (snap.nodes?.length) setPipeline(snap.nodes);
+      const logEvents = (snap.events || []).filter((e) => e.type === 'log');
+      const restored: LogEntry[] = logEvents.map((e, idx) => ({
+        id: 1_000_000_000 + idx,
+        timestamp: e.timestamp,
+        message: typeof e.payload?.message === 'string' ? e.payload.message : '',
+        type: normalizeDeployLogLevel(e.payload?.level),
+      }));
+      setLogs(restored);
+    };
+
+    void (async () => {
+      const stored = sessionStorage.getItem(DEPLOY_PIPELINE_RUN_KEY);
+      if (!stored) return;
+      try {
+        const r = await fetch(`${DEPLOY_API_BASE}/pipeline/runs/${encodeURIComponent(stored)}`);
+        if (!r.ok) {
+          sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+          return;
+        }
+        const snap = (await r.json()) as {
+          status?: string;
+          nodes?: DeployNode[];
+          events?: Array<{ type: string; timestamp: string; payload?: { message?: string; level?: string } }>;
+          eventCount?: number;
+        };
+        if (cancelled) return;
+        if (snap.status === 'running') {
+          setPhase('executing');
+          hydrateFromSnapshot(snap);
+          const running = snap.nodes?.find((n) => n.status === 'running');
+          setActiveTask(running?.name ?? null);
+          const after = typeof snap.eventCount === 'number' ? snap.eventCount : 0;
+          attachPipelineEventSource(stored, after);
+        } else if (snap.status === 'completed' || snap.status === 'failed') {
+          setPhase('completed');
+          hydrateFromSnapshot(snap);
+          setActiveTask(null);
+          sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+          void fetchTaskStats();
+        } else {
+          sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+        }
+      } catch {
+        sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      closePipelineEventSource();
+    };
+  }, [attachPipelineEventSource, closePipelineEventSource, fetchTaskStats]);
+
   // Auto scroll terminal logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('fromFloat') !== '1') return;
+    const raw = sessionStorage.getItem(FLOAT_DEPLOY_SESSION_KEY);
+    if (raw) {
+      sessionStorage.removeItem(FLOAT_DEPLOY_SESSION_KEY);
+    }
+    window.history.replaceState({}, '', '/deploy');
+    if (!raw) return;
+    let p: FloatDeployConfirmedPayload;
+    try {
+      p = JSON.parse(raw) as FloatDeployConfirmedPayload;
+    } catch {
+      return;
+    }
+    if (typeof p.templateId === 'string' && p.templateId) {
+      recordDeployTemplateUsed(p.templateId);
+    }
+    setCommand(typeof p.command === 'string' ? p.command : '');
+    setParsedJira(p.parsedJira ?? null);
+    setParsedBranch(p.parsedBranch ?? null);
+    const ids = Array.isArray(p.projectIds) ? p.projectIds.filter((x) => typeof x === 'string' && x.trim()) : [];
+    setPhase('draft');
+    const now = new Date();
+    const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    setLogs([
+      {
+        id: Date.now(),
+        timestamp: ts,
+        message: '已从浮标载入部署草稿，请确认后执行。',
+        type: 'system',
+      },
+    ]);
+    setPipeline(
+      ids.map((name) => ({
+        id: crypto.randomUUID(),
+        name,
+        status: 'idle' as const,
+      }))
+    );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,11 +363,7 @@ export default function Deployment() {
     await new Promise(resolve => setTimeout(resolve, 800));
 
     // Keyword extraction
-    const tempJiraMatch = cmd.match(/([a-zA-Z]+-\d+)/);
-    const tempBranchMatch = cmd.match(/(?:branch|b|分支)[:\s]+([^\s]+)/i) || cmd.match(/(feature\/[^\s]+|bugfix\/[^\s]+|hotfix\/[^\s]+)/i);
-
-    const detectedJira = tempJiraMatch ? tempJiraMatch[1].toUpperCase() : null;
-    const detectedBranch = tempBranchMatch ? tempBranchMatch[1] : null;
+    const { jira: detectedJira, branch: detectedBranch } = extractJiraAndBranch(cmd);
 
     setParsedJira(detectedJira);
     setParsedBranch(detectedBranch);
@@ -194,8 +399,26 @@ export default function Deployment() {
         );
       }
     } else {
-      resolvedNodes = [cmd];
-      addLog(`[System] Standalone app recognized.`, 'info');
+      const recentMerged = readDeployRecentIdsForResolve();
+      const tmplRes = resolveDeployTemplates(cmd, templates, recentMerged);
+      if (tmplRes.type === 'exact') {
+        resolvedNodes = tmplRes.template.nodes;
+        addLog(
+          `[Template] 匹配: ${tmplRes.template.name}（可信度 ${tmplRes.confidence}）→ ${resolvedNodes.join(', ')}`,
+          'info'
+        );
+      } else if (tmplRes.type === 'multiple') {
+        const pick = tmplRes.candidates[0];
+        resolvedNodes = pick.nodes;
+        addLog(
+          `[Template] 多条命中，已按最近使用优先选用: ${pick.name}（共 ${tmplRes.candidates.length} 条，可从左侧模板切换）`,
+          'warn'
+        );
+      } else {
+        const fallback = stripDeployVerbs(cmd).trim() || cmd;
+        resolvedNodes = [fallback];
+        addLog(`[System] 未命中模板，按单节点/服务名识别: ${fallback}`, 'info');
+      }
     }
 
     if (detectedBranch) {
@@ -268,193 +491,57 @@ export default function Deployment() {
       );
       return;
     }
-    setPhase('executing');
-    addLog(`Initiating configured pipeline...`, 'system');
 
-    // Record this execution as recently used (match by node list against templates)
-    const nodeKey = pipeline.map(n => n.name).join(',');
-    const matchedTpl = templates.find(t => t.nodes.join(',') === nodeKey);
+    const nodeKey = pipeline.map((n) => n.name).join(',');
+    const matchedTpl = templates.find((t) => t.nodes.join(',') === nodeKey);
     if (matchedTpl) {
-      setRecentIds(prev => {
-        const next = [matchedTpl.id, ...prev.filter(id => id !== matchedTpl.id)].slice(0, 5);
+      setRecentIds((prev) => {
+        const next = [matchedTpl.id, ...prev.filter((id) => id !== matchedTpl.id)].slice(0, 5);
         localStorage.setItem('deploy_recent_v1', JSON.stringify(next));
         return next;
       });
     }
 
-    let updatedPipeline = [...pipeline];
-    for (let i = 0; i < updatedPipeline.length; i++) {
-      const node = updatedPipeline[i];
-      setActiveTask(node.name);
-      
-      // Update UI to running for current node
-      updatedPipeline = updatedPipeline.map(n => n.id === node.id ? { ...n, status: 'running' } : n);
-      setPipeline(updatedPipeline);
-      
-      addLog(`[Jenkins] Preparing trigger for project: ${node.name}`, 'info');
-
-      try {
-        const t0 = performance.now();
-        const resp = await fetch(`${DEPLOY_API_BASE}/jenkins/trigger`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectId: node.name,
-            jiraId: parsedJira || undefined,
-            branch: parsedBranch || undefined,
-            pollQueue: true,
-            pollTimeoutMs: 120000,
-          }),
-        });
-        const data = (await resp.json().catch(() => ({}))) as {
-          simulated?: boolean;
-          message?: string;
-          parameters?: Record<string, string>;
-          results?: { message?: string; queueUrl?: string; buildUrl?: string; buildNumber?: number; branch?: string; projectLabel?: string; error?: string }[];
-          error?: string;
-          failedAt?: string;
-        };
-
-        if (!resp.ok) {
-          throw new Error(data.error || data.failedAt || `HTTP ${resp.status}`);
-        }
-
-        if (data.simulated) {
-          throw new Error('Server returned simulated deployment result; production deployment requires Jenkins.');
-        }
-
-        const jobResult = data.results?.[0];
-        if (jobResult?.error) throw new Error(jobResult.error);
-        addLog(`[Jenkins] ${jobResult?.message || 'Triggered.'}`, 'info');
-        if (jobResult?.branch) {
-          addLog(`[Jenkins] Branch resolved for ${node.name}: ${jobResult.branch}`, 'system');
-        }
-        if (jobResult?.queueUrl) {
-          addLog(`[Jenkins] Queue: ${jobResult.queueUrl}`, 'system');
-        }
-        if (jobResult?.buildUrl) {
-          addLog(`[Jenkins] Build: ${jobResult.buildUrl}`, 'system');
-        }
-
-        const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-        const nextStatus: NodeStatus = jobResult?.buildUrl ? 'running' : 'queued';
-        updatedPipeline = updatedPipeline.map((n) =>
-          n.id === node.id
-            ? {
-                ...n,
-                status: nextStatus,
-                duration: `${elapsed}s`,
-                queueUrl: jobResult?.queueUrl,
-                buildUrl: jobResult?.buildUrl,
-                buildNumber: jobResult?.buildNumber,
-                branch: jobResult?.branch,
-              }
-            : n
-        );
-        setPipeline(updatedPipeline);
-
-        if (nextStatus === 'queued') {
-          addLog(
-            `[${node.name}] Jenkins 已接收入队，但未在超时前返回 Build URL；停止后续依赖节点。`,
-            'warn'
-          );
-          setActiveTask(null);
-          setPhase('completed');
-          return;
-        }
-
-        // ---- Wait for build to COMPLETE before proceeding to next node ----
-        // Only needed when there are more nodes after this one.
-        if (jobResult?.buildUrl && i < updatedPipeline.length - 1) {
-          addLog(`[${node.name}] Build #${jobResult.buildNumber} 已启动，等待执行完成后再触发下一节点...`, 'system');
-          const buildResultResp = await fetch(`${DEPLOY_API_BASE}/jenkins/build-result`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              buildUrl: jobResult.buildUrl,
-              timeoutMs: 1800000, // 30 min max wait
-            }),
-          });
-          const buildResult = (await buildResultResp.json().catch(() => ({}))) as {
-            building?: boolean;
-            result?: string | null;
-            duration?: number;
-            error?: string;
-          };
-
-          if (buildResult.error && buildResult.building) {
-            // Timed out waiting for build
-            addLog(`[${node.name}] 等待 build 完成超时：${buildResult.error}，中断后续节点。`, 'warn');
-            updatedPipeline = updatedPipeline.map(n =>
-              n.id === node.id ? { ...n, status: 'queued' } : n
-            );
-            setPipeline(updatedPipeline);
-            setActiveTask(null);
-            setPhase('completed');
-            return;
-          }
-
-          if (buildResult.result !== 'SUCCESS') {
-            const reason = buildResult.result ?? buildResult.error ?? 'UNKNOWN';
-            addLog(`[${node.name}] Build 结果为 ${reason}，中断后续依赖节点。`, 'error');
-            updatedPipeline = updatedPipeline.map(n =>
-              n.id === node.id ? { ...n, status: 'failed' } : n
-            );
-            setPipeline(updatedPipeline);
-            setActiveTask(null);
-            setPhase('completed');
-            return;
-          }
-
-          const buildDuration = buildResult.duration ? `${(buildResult.duration / 1000).toFixed(0)}s` : elapsed + 's';
-          addLog(`[${node.name}] ✅ Build SUCCESS (耗时 ${buildDuration})`, 'success');
-          updatedPipeline = updatedPipeline.map(n =>
-            n.id === node.id ? { ...n, status: 'success', duration: buildDuration } : n
-          );
-          setPipeline(updatedPipeline);
-        } else {
-          // Last node (or only node): mark as success when build URL is present
-          if (jobResult?.buildUrl) {
-            addLog(`[${node.name}] Jenkins build confirmed.`, 'success');
-          }
-          updatedPipeline = updatedPipeline.map(n =>
-            n.id === node.id ? { ...n, status: jobResult?.buildUrl ? 'success' : 'queued' } : n
-          );
-          setPipeline(updatedPipeline);
-        }
-
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        addLog(`[Jenkins ERROR] Failed to trigger ${node.name}: ${message}`, 'error');
-        updatedPipeline = updatedPipeline.map((n) =>
-          n.id === node.id ? { ...n, status: 'failed' } : n
-        );
-        setPipeline(updatedPipeline);
-        setActiveTask(null);
-        return;
-      }
-
-      if (i < updatedPipeline.length - 1) {
-        addLog(`[DAG] Proceeding to dependent node: ${updatedPipeline[i+1].name}`, 'system');
-      }
-    }
-    
+    setPhase('executing');
+    setLogs([]);
     setActiveTask(null);
-    setPhase('completed');
-    addLog('Pipeline execution completed successfully.', 'success');
+    closePipelineEventSource();
+
+    try {
+      const resp = await fetch(`${DEPLOY_API_BASE}/pipeline/runs/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectIds: pipeline.map((n) => n.name),
+          jiraId: parsedJira || undefined,
+          branch: parsedBranch || undefined,
+        }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { runId?: string; error?: string };
+      if (!resp.ok || !data.runId) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+      }
+      sessionStorage.setItem(DEPLOY_PIPELINE_RUN_KEY, data.runId);
+      attachPipelineEventSource(data.runId);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      addLog(`[Pipeline] 启动失败: ${message}`, 'error');
+      setPhase('draft');
+      sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+    }
   };
 
   const recentTemplates = recentIds.map(id => templates.find(t => t.id === id)).filter(Boolean) as Template[];
   const favoritedTemplates = templates.filter(t => favoritedIds.includes(t.id));
 
   return (
-    <div className="flex min-h-0 flex-col" style={{ background: 'var(--bg-secondary)' }}>
-      <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col">
+    <div className="pkmer-page">
+      <div className="pkmer-page-inner pkmer-page-inner--wide">
         
         <PageHeader
           icon={Rocket}
           title="工程部署"
-          subtitle="组合依赖关系，构建有向无环图 (DAG) 流水线"
+          subtitle="服务端 DAG 编排 + Jenkins；离开页面后可恢复日志与节点状态"
           actions={
             <div className="self-center flex flex-wrap items-center justify-end gap-2 text-xs shrink-0 sm:ml-2">
               {healthError ? (
@@ -473,7 +560,7 @@ export default function Deployment() {
                   </span>
                 </>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-400">
+                <span className="inline-flex items-center gap-1 rounded-md border border-[color:var(--color-hairline)] bg-[color:var(--color-shell-bg)] px-2 py-1 pkmer-text-muted">
                   <Loader2 className="h-3 w-3 animate-spin" />检查配置...
                 </span>
               )}
@@ -485,39 +572,39 @@ export default function Deployment() {
         <div className="mb-6 shrink-0">
           <form onSubmit={handleInputSubmit} className="relative max-w-md">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              {isResolving ? <Loader2 className="h-4 w-4 text-gray-400 animate-spin" /> : <Terminal className="h-4 w-4 text-gray-400" />}
+              {isResolving ? <Loader2 className="h-4 w-4 pkmer-text-muted animate-spin" /> : <Terminal className="h-4 w-4 pkmer-text-muted" />}
             </div>
             <input
               type="text"
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               disabled={phase === 'executing' || isResolving}
-              className="artistic-input w-full pl-9 pr-3"
+              className="pkmer-input w-full pl-9 pr-3"
               placeholder="输入自然语言 / Jira 号..."
             />
           </form>
         </div>
 
         {/* ── Three-column Body ── */}
-        <div className="flex flex-1 overflow-hidden gap-6">
+        <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
 
           {/* ── LEFT NAV ── */}
-          <div className="w-52 shrink-0 artistic-card flex flex-col overflow-hidden">
+          <div className="w-52 shrink-0 pkmer-card flex flex-col overflow-hidden">
 
             {/* ⭐ 最近使用 */}
             <div className="px-3 pt-2.5 pb-1.5">
-              <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+              <p className="text-[9px] font-semibold pkmer-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
                 <span>⭐</span> 最近使用
               </p>
               {recentTemplates.length === 0 ? (
-                <p className="text-[10px] text-gray-300 pl-0.5">暂无记录</p>
+                <p className="text-[10px] pkmer-text-muted pl-0.5">暂无记录</p>
               ) : (
                 <div className="flex flex-wrap gap-1">
                   {recentTemplates.map(tpl => (
                     <button
                       key={tpl.id}
                       onClick={() => applyTemplate(tpl.nodes, tpl.id)}
-                      className="px-2 py-0.5 rounded-full bg-gray-100 hover:bg-gray-200 text-[10px] text-gray-600 truncate max-w-full transition-colors"
+                      className="px-2 py-0.5 rounded-full bg-[color:color-mix(in_srgb,var(--color-canvas)_70%,var(--color-shell-bg))] hover:bg-[color:color-mix(in_srgb,var(--color-canvas)_85%,var(--color-shell-bg))] text-[10px] pkmer-text-secondary truncate max-w-full transition-colors"
                     >
                       {tpl.name}
                     </button>
@@ -526,15 +613,51 @@ export default function Deployment() {
               )}
             </div>
 
-            <div className="mx-3 border-t border-gray-100" />
+            <div className="mx-3 border-t border-[color:var(--color-hairline)]" />
+
+            {/* 常用链路（服务端按执行次数统计） */}
+            <div className="px-3 pt-2 pb-1.5">
+              <p className="text-[9px] font-semibold pkmer-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
+                <BarChart2 className="w-3 h-3 shrink-0" />常用链路
+              </p>
+              {taskStats.length === 0 ? (
+                <p className="text-[10px] pkmer-text-muted pl-0.5">发起过「一键部署」后将按次数排序</p>
+              ) : (
+                <ul className="flex flex-col gap-0.5 max-h-[132px] overflow-y-auto scrollbar-hide">
+                  {taskStats.map((row) => (
+                    <li key={row.taskKey}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          applyTemplate(
+                            row.taskKey.split(',').map((s) => s.trim()).filter(Boolean)
+                          )
+                        }
+                        className="w-full text-left px-2 py-1 rounded-md hover:bg-[color:var(--color-surface-hover)] transition-colors flex items-center justify-between gap-1 min-w-0"
+                        title={row.taskKey}
+                      >
+                        <span className="text-[10px] pkmer-text-body truncate flex-1 min-w-0">
+                          {row.taskKey.split(',').map(projectLabel).join(' → ')}
+                        </span>
+                        <span className="shrink-0 text-[9px] font-mono tabular-nums bg-[color:color-mix(in_srgb,var(--color-canvas)_70%,var(--color-shell-bg))] px-1 py-0.5 rounded">
+                          {row.count}次
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="mx-3 border-t border-[color:var(--color-hairline)]" />
 
             {/* 📌 收藏 */}
             <div className="px-3 pt-1.5 pb-1.5">
-              <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+              <p className="text-[9px] font-semibold pkmer-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
                 <span>📌</span> 收藏
               </p>
               {favoritedTemplates.length === 0 ? (
-                <p className="text-[10px] text-gray-300 pl-0.5">hover 模板可收藏</p>
+                <p className="text-[10px] pkmer-text-muted pl-0.5">hover 模板可收藏</p>
               ) : (
                 <div className="flex flex-wrap gap-1">
                   {favoritedTemplates.map(tpl => (
@@ -550,18 +673,18 @@ export default function Deployment() {
               )}
             </div>
 
-            <div className="mx-3 border-t border-gray-100" />
+            <div className="mx-3 border-t border-[color:var(--color-hairline)]" />
 
             {/* Tab: 工程 | 模板 */}
             <div className="px-3 pt-2 shrink-0">
-              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px] font-medium">
+              <div className="flex rounded-lg border border-[color:var(--color-hairline)] overflow-hidden text-[11px] font-medium">
                 <button
                   onClick={() => setActiveLeftTab('project')}
-                  className={`flex-1 py-1.5 transition-colors ${activeLeftTab === 'project' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  className={`flex-1 py-1.5 transition-colors ${activeLeftTab === 'project' ? 'bg-[color:var(--color-muted-800)] text-white' : 'bg-[color:var(--color-shell-bg)] pkmer-text-secondary hover:bg-[color:var(--color-surface-hover)]'}`}
                 >工程</button>
                 <button
                   onClick={() => setActiveLeftTab('template')}
-                  className={`flex-1 py-1.5 transition-colors ${activeLeftTab === 'template' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  className={`flex-1 py-1.5 transition-colors ${activeLeftTab === 'template' ? 'bg-[color:var(--color-muted-800)] text-white' : 'bg-[color:var(--color-shell-bg)] pkmer-text-secondary hover:bg-[color:var(--color-surface-hover)]'}`}
                 >模板</button>
               </div>
             </div>
@@ -571,49 +694,56 @@ export default function Deployment() {
               {activeLeftTab === 'project' ? (
                 <div className="flex flex-col gap-px">
                   {deployProjects.length === 0 ? (
-                    <p className="text-[10px] text-gray-300 pl-1 pt-1">无可用工程</p>
+                    <p className="text-[10px] pkmer-text-muted pl-1 pt-1">无可用工程</p>
                   ) : deployProjects.map(proj => (
                     <button
                       key={proj.id}
                       onClick={() => applyTemplate([proj.id])}
-                      className="w-full text-left px-2 py-1.5 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-between gap-2 group"
+                      className="w-full text-left px-2 py-1.5 rounded-md hover:bg-[color:var(--color-surface-hover)] transition-colors flex items-center justify-between gap-2 group"
                     >
-                      <span className="text-[11px] text-gray-700 truncate flex-1 min-w-0">{proj.label}</span>
-                      <span className="shrink-0 text-[10px] font-mono text-gray-400 bg-gray-100 group-hover:bg-gray-200 px-1.5 py-0.5 rounded transition-colors max-w-[72px] truncate">{proj.defaultBranch}</span>
+                      <span className="text-[11px] pkmer-text-body truncate flex-1 min-w-0">{proj.label}</span>
+                      <span className="shrink-0 text-[10px] font-mono pkmer-text-muted bg-[color:color-mix(in_srgb,var(--color-canvas)_65%,var(--color-shell-bg))] group-hover:bg-[color:color-mix(in_srgb,var(--color-canvas)_80%,var(--color-shell-bg))] px-1.5 py-0.5 rounded transition-colors max-w-[72px] truncate">{proj.defaultBranch}</span>
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="flex flex-col gap-px">
                   <button
-                    onClick={() => { setPhase('draft'); setPipeline([]); setLogs([]); setIsSavingTemplate(false); }}
-                    className="w-full text-left px-2 py-1.5 rounded-md hover:bg-blue-50 text-[11px] text-blue-600 flex items-center gap-1 transition-colors mb-0.5"
+                    onClick={() => {
+                      closePipelineEventSource();
+                      sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+                      setPhase('draft');
+                      setPipeline([]);
+                      setLogs([]);
+                      setIsSavingTemplate(false);
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded-md hover:bg-[color:color-mix(in_srgb,var(--color-primary-500)_10%,var(--color-shell-bg))] text-[11px] pkmer-link-indigo flex items-center gap-1 transition-colors mb-0.5"
                   >
                     <FilePlus className="w-3 h-3 shrink-0" /> 创建空白链路
                   </button>
                   {templates.length === 0 ? (
-                    <p className="text-[10px] text-gray-300 pl-1 pt-1">暂无模板</p>
+                    <p className="text-[10px] pkmer-text-muted pl-1 pt-1">暂无模板</p>
                   ) : templates.map(tpl => (
                     <div
                       key={tpl.id}
-                      className="group flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="group flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[color:var(--color-surface-hover)] cursor-pointer transition-colors"
                       onClick={() => applyTemplate(tpl.nodes, tpl.id)}
                     >
                       <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-                        <span className="text-[11px] text-gray-700 truncate">{tpl.name}</span>
+                        <span className="text-[11px] pkmer-text-body truncate">{tpl.name}</span>
                         {tpl.nodes.length > 1 && (
-                          <span className="shrink-0 text-[9px] font-mono text-gray-400 bg-gray-100 px-1 py-0.5 rounded">{tpl.nodes.length}步</span>
+                          <span className="shrink-0 text-[9px] font-mono pkmer-text-muted bg-[color:color-mix(in_srgb,var(--color-canvas)_65%,var(--color-shell-bg))] px-1 py-0.5 rounded">{tpl.nodes.length}步</span>
                         )}
                       </div>
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleFavorite(tpl.id); }}
-                          className={`p-0.5 rounded text-xs ${favoritedIds.includes(tpl.id) ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}
+                          className={`p-0.5 rounded text-xs ${favoritedIds.includes(tpl.id) ? 'text-amber-500' : 'pkmer-text-muted hover:text-amber-400'}`}
                           title={favoritedIds.includes(tpl.id) ? '取消收藏' : '收藏'}
                         >📌</button>
                         <button
                           onClick={(e) => handleDeleteTemplate(e, tpl.id)}
-                          className="p-0.5 rounded text-gray-300 hover:text-red-500"
+                          className="p-0.5 rounded pkmer-text-muted hover:text-red-500"
                           title="删除"
                         ><Trash2 className="w-3 h-3" /></button>
                       </div>
@@ -625,14 +755,14 @@ export default function Deployment() {
           </div>
 
           {/* ── MIDDLE: DAG Editor ── */}
-          <div className="flex-1 flex flex-col overflow-hidden artistic-card mr-3">
+          <div className="flex-1 flex flex-col overflow-hidden pkmer-card mr-3">
             {/* DAG toolbar */}
             <div className="shrink-0 h-12 flex items-center px-4 gap-3" style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">DAG 依赖编排</span>
+              <span className="text-xs font-semibold pkmer-text-muted uppercase tracking-widest">DAG 依赖编排</span>
               {(parsedJira || parsedBranch) && (
                 <div className="flex items-center gap-2">
                   {parsedJira && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-mono">
+                    <span className="pkmer-badge">
                       <Tag className="w-2.5 h-2.5" />{parsedJira}
                     </span>
                   )}
@@ -652,19 +782,25 @@ export default function Deployment() {
                         type="text" autoFocus value={newTemplateName}
                         onChange={e => setNewTemplateName(e.target.value)}
                         placeholder="模板名称..."
-                        className="artistic-input text-xs py-1 px-2 w-24"
+                        className="pkmer-input text-xs py-1 px-2 w-24"
                       />
-                      <button type="submit" className="text-xs text-blue-600 font-medium">确认</button>
-                      <button type="button" onClick={() => setIsSavingTemplate(false)} className="text-xs text-gray-400">取消</button>
+                      <button type="submit" className="text-xs pkmer-link-indigo font-medium">确认</button>
+                      <button type="button" onClick={() => setIsSavingTemplate(false)} className="text-xs pkmer-text-muted">取消</button>
                     </form>
                   ) : (
-                    <button onClick={() => setIsSavingTemplate(true)} disabled={pipeline.length === 0}
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 disabled:opacity-40">
+                    <button
+                      type="button"
+                      onClick={() => setIsSavingTemplate(true)}
+                      disabled={pipeline.length === 0}
+                      className="text-xs pkmer-link-indigo flex items-center gap-1 disabled:opacity-40"
+                    >
                       <Save className="w-3 h-3" />存为模板
                     </button>
                   )}
-                  <div className="h-3 w-px bg-gray-200" />
-                  <button onClick={() => setPhase('idle')} className="text-xs text-gray-400 hover:text-gray-700">重新选用</button>
+                  <div className="h-3 w-px bg-[color:var(--color-hairline)]" />
+                  <button type="button" onClick={() => setPhase('idle')} className="text-xs pkmer-text-muted hover:text-[color:var(--color-ink)]">
+                    重新选用
+                  </button>
                 </div>
               )}
             </div>
@@ -673,41 +809,55 @@ export default function Deployment() {
             <div className="flex-1 overflow-y-auto flex flex-col items-center py-6 scrollbar-hide" style={{ background: 'var(--bg-secondary)' }}>
               {phase === 'idle' && (
                 <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                  <Box className="w-8 h-8 mb-3 text-gray-200" />
-                  <p className="text-sm text-gray-400">从菜单中进入部署页后，可在此选择模板，或通过顶部输入框描述部署意图</p>
-                  <p className="text-xs text-gray-300 mt-1.5">"帮我先发 auth 服务再发 admin 页面"</p>
+                  <Box className="w-8 h-8 mb-3 pkmer-text-muted opacity-40" />
+                  <p className="text-sm pkmer-text-muted">从菜单中进入部署页后，可在此选择模板，或通过顶部输入框描述部署意图</p>
+                  <p className="text-xs pkmer-text-muted mt-1.5">"帮我先发 auth 服务再发 admin 页面"</p>
                 </div>
               )}
 
               {(phase === 'draft' || phase === 'executing' || phase === 'completed') && (
-                <div className="flex flex-col items-center w-full max-w-[260px]">
+                <div className="flex w-full min-w-0 max-w-md flex-col items-center">
                   {pipeline.length === 0 && !isAddingNode && (
-                    <p className="text-xs text-gray-400 mb-4">链路为空，请添加节点</p>
+                    <p className="text-xs pkmer-text-muted mb-4">链路为空，请添加节点</p>
                   )}
 
                   {pipeline.map((node, index) => (
                     <div key={node.id} className="relative flex flex-col items-center group w-full">
-                      <div className={`w-full p-3 rounded-xl border-2 flex items-center justify-between transition-all bg-white relative z-10 shadow-sm ${
-                        node.status === 'running' ? 'border-blue-400 ring-4 ring-blue-50 shadow-blue-100' :
-                        node.status === 'success' ? 'border-gray-900 shadow-gray-100' :
-                        node.status === 'queued' ? 'border-amber-300 ring-4 ring-amber-50' :
-                        node.status === 'failed' ? 'border-red-300 ring-4 ring-red-50' :
-                        'border-gray-200 hover:border-gray-300'
-                      }`}>
+                      <div
+                        className={`w-full p-3 rounded-xl border-2 flex items-center justify-between transition-all bg-[color:var(--color-shell-bg)] relative z-10 shadow-sm ${
+                          node.status === 'running'
+                            ? 'pkmer-node-card--running'
+                            : node.status === 'success'
+                              ? 'pkmer-node-card--success'
+                              : node.status === 'queued'
+                                ? 'border-[color:color-mix(in_srgb,var(--warning)_45%,transparent)] shadow-[0_0_0_4px_color-mix(in_srgb,var(--warning)_12%,transparent)]'
+                                : node.status === 'failed'
+                                  ? 'pkmer-node-card--fail'
+                                  : 'border-[color:var(--color-hairline)] hover:border-[color:color-mix(in_srgb,var(--color-muted-400)_55%,var(--color-shell-bg))]'
+                        }`}
+                      >
                         <div className="flex items-center gap-2.5 overflow-hidden">
                           <div className="shrink-0">
-                            {node.status === 'idle' && <div className="w-2 h-2 rounded-full bg-gray-300" />}
-                            {node.status === 'running' && <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
-                            {node.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-gray-900" />}
+                            {node.status === 'idle' && (
+                              <div className="w-2 h-2 rounded-full bg-[color:var(--color-muted-400)]" />
+                            )}
+                            {node.status === 'running' && (
+                              <Loader2 className="w-3.5 h-3.5 text-[color:var(--color-primary-500)] animate-spin" />
+                            )}
+                            {node.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-[color:var(--color-muted-800)]" />}
                             {node.status === 'queued' && <Clock className="w-3.5 h-3.5 text-amber-500" />}
                             {node.status === 'failed' && <XCircle className="w-3.5 h-3.5 text-red-500" />}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold font-mono tracking-tight truncate text-gray-900">{projectLabel(node.name)}</p>
-                            <p className="text-[10px] text-gray-400 font-mono truncate">{node.branch || node.name}</p>
+                            <p className="text-xs font-bold font-mono tracking-tight truncate text-[color:var(--color-muted-800)]">{projectLabel(node.name)}</p>
+                            <p className="text-[10px] pkmer-text-muted font-mono truncate">{node.branch || node.name}</p>
                             {(node.buildUrl || node.queueUrl) && (
-                              <a href={node.buildUrl || node.queueUrl} target="_blank" rel="noreferrer"
-                                className="mt-0.5 flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 truncate">
+                              <a
+                                href={node.buildUrl || node.queueUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-0.5 flex items-center gap-1 text-[10px] pkmer-link-indigo truncate"
+                              >
                                 <ExternalLink className="h-2.5 w-2.5 shrink-0" />
                                 {node.buildNumber ? `Build #${node.buildNumber}` : 'Jenkins queue'}
                               </a>
@@ -716,13 +866,16 @@ export default function Deployment() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0 ml-2">
                           {node.duration && (
-                            <span className="text-[10px] font-mono text-gray-400 flex items-center gap-0.5">
+                            <span className="text-[10px] font-mono pkmer-text-muted flex items-center gap-0.5">
                               <Clock className="w-2.5 h-2.5" />{node.duration}
                             </span>
                           )}
                           {phase === 'draft' && (
-                            <button onClick={() => removeNode(node.id)}
-                              className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity bg-white rounded-full p-0.5 shadow-sm">
+                            <button
+                              type="button"
+                              onClick={() => removeNode(node.id)}
+                              className="opacity-0 group-hover:opacity-100 pkmer-text-muted hover:text-red-500 transition-opacity bg-[color:var(--color-shell-bg)] rounded-full p-0.5 shadow-sm"
+                            >
                               <X className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -731,8 +884,17 @@ export default function Deployment() {
 
                     {(index < pipeline.length - 1 || isAddingNode) && (
                       <div className="flex flex-col items-center w-full h-[28px] relative">
-                        <div className={`w-[2px] h-full ${node.status === 'success' ? 'bg-gray-900' : 'bg-gray-200'}`} />
-                        <div className={`absolute bottom-0 w-1.5 h-1.5 border-b-2 border-r-2 ${node.status === 'success' ? 'border-gray-900' : 'border-gray-200'}`}
+                        <div
+                          className={`w-[2px] h-full ${
+                            node.status === 'success' ? 'bg-[color:var(--color-muted-800)]' : 'bg-[color:var(--color-hairline)]'
+                          }`}
+                        />
+                        <div
+                          className={`absolute bottom-0 w-1.5 h-1.5 border-b-2 border-r-2 ${
+                            node.status === 'success'
+                              ? 'border-[color:var(--color-muted-800)]'
+                              : 'border-[color:var(--color-hairline)]'
+                          }`}
                           style={{ transform: 'translateY(1px) rotate(45deg)' }} />
                       </div>
                     )}
@@ -743,35 +905,52 @@ export default function Deployment() {
                 {phase === 'draft' && (
                   <div className="w-full flex justify-center mt-0">
                     {isAddingNode ? (
-                      <div className="w-full p-2.5 rounded-xl border-2 border-dashed border-gray-300 bg-white shadow-sm">
+                      <div className="w-full p-2.5 rounded-xl border-2 border-dashed border-[color:color-mix(in_srgb,var(--color-muted-500)_35%,transparent)] bg-[color:var(--color-shell-bg)] shadow-sm">
                         <form onSubmit={handleAddNode} className="flex items-center gap-2">
                           {deployProjects.length > 0 ? (
-                            <select autoFocus value={newNodeName || deployProjects[0]?.id || ''}
+                            <select
+                              autoFocus
+                              value={newNodeName || deployProjects[0]?.id || ''}
                               onChange={(e) => setNewNodeName(e.target.value)}
-                              className="w-full bg-transparent text-xs outline-none text-gray-800 font-mono">
+                              className="w-full bg-transparent text-xs outline-none pkmer-text-body font-mono"
+                            >
                               {deployProjects.map((p) => (
-                                <option key={p.id} value={p.id}>{p.label} · {p.defaultBranch}</option>
+                                <option key={p.id} value={p.id}>
+                                  {p.label} · {p.defaultBranch}
+                                </option>
                               ))}
                             </select>
                           ) : (
-                            <input autoFocus type="text" value={newNodeName}
+                            <input
+                              autoFocus
+                              type="text"
+                              value={newNodeName}
                               onChange={(e) => setNewNodeName(e.target.value)}
-                              className="w-full bg-transparent text-xs outline-none text-gray-800 font-mono placeholder:text-gray-400"
-                              placeholder="输入工程 ID..." />
+                              className="w-full bg-transparent text-xs outline-none pkmer-text-body font-mono placeholder:text-[color:var(--color-ink-lighter)]"
+                              placeholder="输入工程 ID..."
+                            />
                           )}
-                          <button type="submit" disabled={deployProjects.length === 0 && !newNodeName.trim()}
-                            className="text-gray-400 hover:text-green-600 disabled:opacity-40">
+                          <button
+                            type="submit"
+                            disabled={deployProjects.length === 0 && !newNodeName.trim()}
+                            className="pkmer-text-muted hover:text-green-600 disabled:opacity-40"
+                          >
                             <CheckCircle2 className="w-4 h-4" />
                           </button>
-                          <button type="button" onClick={() => setIsAddingNode(false)} className="text-gray-400 hover:text-gray-600">
+                          <button type="button" onClick={() => setIsAddingNode(false)} className="pkmer-text-muted hover:text-[color:var(--color-ink-light)]">
                             <X className="w-4 h-4" />
                           </button>
                         </form>
                       </div>
                     ) : (
                       <button
-                        onClick={() => { setNewNodeName(deployProjects[0]?.id || ''); setIsAddingNode(true); }}
-                        className="text-[11px] text-gray-400 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-4 py-1.5 bg-white hover:bg-gray-50 hover:border-gray-400 transition-colors flex items-center gap-1 shadow-sm mt-1">
+                        type="button"
+                        onClick={() => {
+                          setNewNodeName(deployProjects[0]?.id || '');
+                          setIsAddingNode(true);
+                        }}
+                        className="text-[11px] pkmer-text-muted hover:text-[color:var(--color-ink)] border border-dashed border-[color:color-mix(in_srgb,var(--color-muted-500)_35%,transparent)] rounded-lg px-4 py-1.5 bg-[color:var(--color-shell-bg)] hover:bg-[color:var(--color-surface-hover)] hover:border-[color:color-mix(in_srgb,var(--color-muted-500)_55%,transparent)] transition-colors flex items-center gap-1 shadow-sm mt-1"
+                      >
                         <Plus className="w-3 h-3" />添加节点
                       </button>
                     )}
@@ -787,7 +966,7 @@ export default function Deployment() {
                 <button
                   onClick={executePipeline}
                   disabled={pipeline.length === 0 || health?.jenkinsConfigured !== true}
-                  className="artistic-button artistic-button-primary w-full"
+                  className="pkmer-btn pkmer-btn--accent w-full"
                 >
                   <Play className="w-4 h-4" fill="currentColor" />开始构建与部署
                 </button>
@@ -796,8 +975,15 @@ export default function Deployment() {
             {phase === 'completed' && (
               <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid var(--border-light)' }}>
                 <button
-                  onClick={() => { setPhase('idle'); setPipeline([]); setLogs([]); setCommand(''); }}
-                  className="artistic-button artistic-button-secondary w-full"
+                  onClick={() => {
+                    closePipelineEventSource();
+                    sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
+                    setPhase('idle');
+                    setPipeline([]);
+                    setLogs([]);
+                    setCommand('');
+                  }}
+                  className="pkmer-btn pkmer-btn--outline w-full"
                 >
                   重置，开始新部署
                 </button>
@@ -806,56 +992,70 @@ export default function Deployment() {
           </div>
 
           {/* ── RIGHT: Log Output + Execution Status ── */}
-          <div className="w-[500px] shrink-0 flex flex-col bg-[#111111] overflow-hidden rounded-xl">
-            {/* Terminal header */}
-            <div className="h-10 bg-[#1E1E1E] flex items-center px-4 border-b border-[#2A2A2A] shrink-0 rounded-t-xl">
+          <div className="w-[500px] shrink-0 pkmer-terminal">
+            <div className="pkmer-terminal__chrome rounded-t-xl">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-[#FF5F56]" />
                 <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
                 <div className="w-3 h-3 rounded-full bg-[#27C93F]" />
               </div>
-              <p className="ml-3 text-xs font-mono text-gray-500">日志输出 — System Log</p>
+              <p className="ml-3 text-xs font-mono">日志输出 — System Log</p>
             </div>
-            {/* Log content */}
-            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs text-gray-300 leading-relaxed selection:bg-gray-600 scrollbar-hide">
+            <div className="pkmer-terminal__body text-[0.8125rem] leading-relaxed scrollbar-hide" style={{ boxShadow: 'none' }}>
               {logs.length === 0 ? (
-                <div className="text-gray-600">Waiting for actions...</div>
+                <div className="pkmer-log-line--cmd">Waiting for actions...</div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  {logs.map(log => (
+                  {logs.map((log) => (
                     <div key={log.id} className="flex gap-3">
-                      <span className="text-gray-600 shrink-0 select-none">[{log.timestamp}]</span>
-                      <span className={`break-all ${
-                        log.type === 'error' ? 'text-red-400' :
-                        log.type === 'success' ? 'text-green-400' :
-                        log.type === 'warn' ? 'text-yellow-400' :
-                        log.type === 'system' ? 'text-blue-300' :
-                        log.type === 'prompt' ? 'text-purple-300 font-bold' :
-                        'text-gray-300'
-                      }`}>{log.message}</span>
+                      <span className="pkmer-log-line--cmd shrink-0 select-none">[{log.timestamp}]</span>
+                      <span
+                        className={`break-all ${
+                          log.type === 'error'
+                            ? 'pkmer-log-line--error'
+                            : log.type === 'success'
+                              ? 'pkmer-log-line--success'
+                              : log.type === 'warn'
+                                ? 'pkmer-log-line--warn'
+                                : log.type === 'system'
+                                  ? 'pkmer-log-line--system'
+                                  : log.type === 'prompt'
+                                    ? 'font-bold'
+                                    : 'pkmer-log-line--muted'
+                        }`}
+                        style={
+                          log.type === 'prompt'
+                            ? { color: 'color-mix(in srgb, var(--color-accent-secondary) 85%, var(--color-code-text))' }
+                            : undefined
+                        }
+                      >
+                        {log.message}
+                      </span>
                     </div>
                   ))}
                   <div ref={logsEndRef} />
                 </div>
               )}
             </div>
-
-            {/* Execution Status Bar */}
-            <div className="shrink-0 border-t border-[#2A2A2A] bg-[#1A1A1A] px-4 py-2 rounded-b-xl">
-              {(activeTask || isResolving) ? (
-                <p className="text-xs font-mono text-gray-400 flex items-center gap-2">
+            <div className="shrink-0 px-4 py-2 rounded-b-xl bg-[color:var(--color-code-tabs)] border-t border-solid" style={{ borderTopColor: 'color-mix(in srgb, var(--color-code-text) 14%, transparent)' }}>
+              {(activeTask || isResolving || phase === 'executing') ? (
+                <p className="text-xs font-mono flex items-center gap-2" style={{ color: 'color-mix(in srgb, var(--color-code-text) 72%, transparent)' }}>
                   <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[color:var(--color-search-hit)] opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[color:var(--color-search-hit)]" />
                   </span>
-                  {isResolving ? '解析任务意图...' : `执行中 → ${activeTask}`}
+                  {isResolving
+                    ? '解析任务意图...'
+                    : activeTask
+                      ? `执行中 → ${activeTask}`
+                      : '服务端编排中…'}
                 </p>
               ) : phase === 'completed' ? (
-                <p className="text-xs font-mono text-green-500 flex items-center gap-2">
+                <p className="text-xs font-mono pkmer-log-line--success flex items-center gap-2">
                   <CheckCircle2 className="w-3 h-3" />流水线执行完成
                 </p>
               ) : (
-                <p className="text-xs font-mono text-gray-600">就绪</p>
+                <p className="text-xs font-mono pkmer-log-line--cmd">就绪</p>
               )}
             </div>
           </div>

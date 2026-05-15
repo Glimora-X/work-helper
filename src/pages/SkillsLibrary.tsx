@@ -112,6 +112,89 @@ function modelBadgeClass(source: LocalModelSource): string {
   }
 }
 
+/** 超过该字数显示「展开全文」 */
+const SKILL_INTRO_COLLAPSE_CHARS = 168;
+
+function SkillLibraryCard({
+  skill: s,
+  index,
+  copiedId,
+  onCopyPath,
+}: {
+  skill: LocalSkillEntry;
+  index: number;
+  copiedId: string | null;
+  onCopyPath: (pathStr: string, id: string) => void;
+}) {
+  const id = s.skillMdPath;
+  const intro = (s.description || '').trim();
+  const [expanded, setExpanded] = useState(false);
+  const needsToggle = intro.length > SKILL_INTRO_COLLAPSE_CHARS;
+
+  return (
+    <motion.article
+      layout
+      initial={{opacity: 0, y: 12}}
+      animate={{opacity: 1, y: 0}}
+      exit={{opacity: 0, scale: 0.96}}
+      transition={{delay: Math.min(index * 0.03, 0.45), duration: 0.35, ease: [0.22, 1, 0.36, 1]}}
+      className="skills-lib__card skills-lib__card--skill"
+    >
+      <div className="skills-lib__card-head">
+        <h2 className="skills-lib__card-name">{s.displayName}</h2>
+        <span className={badgeClass(s.source)}>{SOURCE_LABEL[s.source]}</span>
+      </div>
+
+      <div className="skills-lib__intro-wrap">
+        <span className="skills-lib__intro-kicker">简介</span>
+        {intro ? (
+          <>
+            <p
+              className={
+                expanded || !needsToggle
+                  ? 'skills-lib__intro skills-lib__intro--open'
+                  : 'skills-lib__intro skills-lib__intro--clamp'
+              }
+            >
+              {intro}
+            </p>
+            {needsToggle ? (
+              <button
+                type="button"
+                className="skills-lib__intro-toggle"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? '收起' : '展开全文'}
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <p className="skills-lib__intro skills-lib__intro--empty">
+            暂无简介：可在 SKILL.md 的 YAML 中加入 <code className="skills-lib__inline-code">description</code>
+            ，或在正文首段说明用途（扫描时会自动摘取摘要）。
+          </p>
+        )}
+      </div>
+
+      <div className="skills-lib__path-block">
+        <span className="skills-lib__intro-kicker">文件路径</span>
+        <p className="skills-lib__path">{s.skillMdPath}</p>
+      </div>
+
+      <div className="skills-lib__actions">
+        <button
+          type="button"
+          className={`skills-lib__copy${copiedId === id ? ' skills-lib__copy--done' : ''}`}
+          onClick={() => void onCopyPath(s.skillMdPath, id)}
+        >
+          {copiedId === id ? '已复制路径' : '复制路径'}
+        </button>
+      </div>
+    </motion.article>
+  );
+}
+
 const emptySkills: ScanPayload = {skills: [], rootsTried: [], warnings: []};
 const emptyMcp: McpPayload = {servers: [], configsTried: [], warnings: []};
 const emptyModels: ModelsPayload = {models: [], rootsTried: [], warnings: []};
@@ -243,7 +326,7 @@ export default function SkillsLibrary() {
   }, [tab, skillsData, mcpData, modelsData, filteredSkills.length, filteredMcp.length, filteredModels.length]);
 
   return (
-    <div className="skills-lib">
+    <div className="pkmer-page skills-lib">
       <div className="skills-lib__inner">
         <PageHeader
           icon={Library}
@@ -346,6 +429,7 @@ export default function SkillsLibrary() {
           </div>
         </div>
 
+        <div className="skills-lib__body">
         {loading ? (
           <div className="skills-lib__empty" role="status">
             <div className="skills-lib__spinner" />
@@ -398,36 +482,15 @@ export default function SkillsLibrary() {
               ) : (
                 <div className="skills-lib__grid">
                   <AnimatePresence mode="popLayout">
-                    {filteredSkills.map((s, i) => {
-                      const id = s.skillMdPath;
-                      return (
-                        <motion.article
-                          key={id}
-                          layout
-                          initial={{opacity: 0, y: 12}}
-                          animate={{opacity: 1, y: 0}}
-                          exit={{opacity: 0, scale: 0.96}}
-                          transition={{delay: Math.min(i * 0.03, 0.45), duration: 0.35, ease: [0.22, 1, 0.36, 1]}}
-                          className="skills-lib__card"
-                        >
-                          <div className="skills-lib__card-head">
-                            <h2 className="skills-lib__card-name">{s.displayName}</h2>
-                            <span className={badgeClass(s.source)}>{SOURCE_LABEL[s.source]}</span>
-                          </div>
-                          {s.description ? <p className="skills-lib__desc">{s.description}</p> : <p className="skills-lib__desc">（无描述）</p>}
-                          <p className="skills-lib__path">{s.skillMdPath}</p>
-                          <div className="skills-lib__actions">
-                            <button
-                              type="button"
-                              className={`skills-lib__copy${copiedId === id ? ' skills-lib__copy--done' : ''}`}
-                              onClick={() => void copyPath(s.skillMdPath, id)}
-                            >
-                              {copiedId === id ? '已复制路径' : '复制路径'}
-                            </button>
-                          </div>
-                        </motion.article>
-                      );
-                    })}
+                    {filteredSkills.map((s, i) => (
+                      <SkillLibraryCard
+                        key={s.skillMdPath}
+                        skill={s}
+                        index={i}
+                        copiedId={copiedId}
+                        onCopyPath={copyPath}
+                      />
+                    ))}
                   </AnimatePresence>
                 </div>
               )
@@ -528,6 +591,7 @@ export default function SkillsLibrary() {
             ) : null}
           </>
         )}
+        </div>
       </div>
     </div>
   );

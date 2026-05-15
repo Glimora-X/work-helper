@@ -155,10 +155,12 @@ export default function Automations() {
 
   const getIcon = (type: AutomationTask['type']) => {
     switch(type) {
-      case 'code': return <GitBranch className="w-5 h-5 text-blue-500" />;
+      case 'code':
+        return <GitBranch className="w-5 h-5 pkmer-icon-indigo" />;
       case 'report': return <FileText className="w-5 h-5 text-purple-500" />;
       case 'jira': return <CheckSquare className="w-5 h-5 text-amber-500" />;
-      default: return <Bot className="w-5 h-5 text-gray-500" />;
+      default:
+        return <Bot className="w-5 h-5 pkmer-text-secondary" />;
     }
   };
 
@@ -269,8 +271,8 @@ export default function Automations() {
   };
 
   return (
-    <div className="flex min-h-0 flex-col relative" style={{ background: 'var(--bg-secondary)' }}>
-      <div className="p-8 md:p-12 pb-4 max-w-6xl mx-auto w-full flex-1 min-h-0 flex flex-col relative z-0">
+    <div className="pkmer-page relative" style={{background: 'var(--bg-secondary)'}}>
+      <div className="pkmer-page-inner pkmer-page-inner--wide">
         
         <PageHeader
           icon={Bot}
@@ -281,7 +283,7 @@ export default function Automations() {
               <button
                 type="button"
                 onClick={() => setIsCreating(true)}
-                className="artistic-button artistic-button-primary"
+                className="pkmer-btn pkmer-btn--accent"
               >
                 <Plus className="w-4 h-4" /> 新建任务
               </button>
@@ -298,7 +300,7 @@ export default function Automations() {
               placeholder="搜索任务名称或规则..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="artistic-input w-full pl-9 pr-4"
+              className="pkmer-input w-full pl-9 pr-4"
             />
           </div>
           <div className="flex items-center gap-2 ml-auto text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -312,7 +314,7 @@ export default function Automations() {
         </div>
 
         {/* Task Grid */}
-        <div className="flex-1 overflow-y-auto pb-8 scrollbar-hide">
+        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto pb-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredTasks.map(task => (
               <div
@@ -338,12 +340,19 @@ export default function Automations() {
                   <div
                     className="p-2.5 rounded-xl inline-flex"
                     style={{
-                      background: task.type === 'code' ? 'rgba(74,144,217,0.08)' :
-                                  task.type === 'report' ? 'rgba(124,77,255,0.08)' :
-                                  'rgba(255,171,0,0.08)',
-                      border: `1px solid ${task.type === 'code' ? 'rgba(74,144,217,0.2)' :
-                                           task.type === 'report' ? 'rgba(124,77,255,0.2)' :
-                                           'rgba(255,171,0,0.2)'}`,
+                      background:
+                        task.type === 'code'
+                          ? 'color-mix(in srgb, var(--color-primary-600) 10%, var(--color-shell-bg))'
+                          : task.type === 'report'
+                            ? 'color-mix(in srgb, var(--color-accent-secondary) 12%, var(--color-shell-bg))'
+                            : 'color-mix(in srgb, var(--color-accent) 12%, var(--color-shell-bg))',
+                      border: `1px solid ${
+                        task.type === 'code'
+                          ? 'color-mix(in srgb, var(--color-primary-600) 28%, transparent)'
+                          : task.type === 'report'
+                            ? 'color-mix(in srgb, var(--color-accent-secondary) 30%, transparent)'
+                            : 'color-mix(in srgb, var(--color-accent) 30%, transparent)'
+                      }`,
                     }}
                   >
                     {getIcon(task.type)}
@@ -463,7 +472,7 @@ export default function Automations() {
           <div className="rounded-2xl shadow-2xl w-full max-w-2xl max-h-full flex flex-col animate-in fade-in zoom-in-95 duration-200" style={{ background: 'var(--bg-card)' }}>
             <div className="flex items-center justify-between p-6" style={{ borderBottom: '1px solid var(--border-light)' }}>
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ background: 'var(--accent-light)', border: '1px solid rgba(74,144,217,0.2)', color: 'var(--accent-primary)' }}>
+                <div className="p-2 rounded-lg" style={{ background: 'var(--accent-light)', border: '1px solid color-mix(in srgb, var(--color-primary-600) 25%, transparent)', color: 'var(--accent-primary)' }}>
                   <Zap className="w-5 h-5" />
                 </div>
                 <div>
@@ -496,7 +505,7 @@ export default function Automations() {
                       border: '1px solid var(--border-light)',
                       color: 'var(--text-primary)',
                     }}
-                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(74,144,217,0.1)'; }}
+                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--focus-ring-shadow)'; }}
                     onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                   />
                 </div>
@@ -511,9 +520,9 @@ export default function Automations() {
                     rows={14}
                     className="w-full rounded-lg p-4 text-sm font-mono focus:outline-none resize-y min-h-[200px]"
                     style={{
-                      background: '#1e2635',
-                      border: '1px solid #2d3a4f',
-                      color: '#e2e8f0',
+                      background: 'var(--color-code-bg)',
+                      border: '1px solid var(--color-code-tabs)',
+                      color: 'var(--color-code-text)',
                     }}
                   />
                   <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>保存后写入本机；实际定时仍以服务端 / 环境变量为准。</p>
@@ -577,7 +586,7 @@ export default function Automations() {
                 }}
                 onFocus={(e) => {
                   (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(74,144,217,0.1)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = 'var(--focus-ring-shadow)';
                 }}
                 onBlur={(e) => {
                   (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)';

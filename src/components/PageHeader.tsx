@@ -9,7 +9,7 @@ export interface PageHeaderProps {
   className?: string;
 }
 
-const TITLE_FONT = '"Noto Serif SC", "Noto Sans SC", serif';
+const TITLE_FONT = '"Noto Sans SC", system-ui, sans-serif';
 
 export default function PageHeader({
   title,

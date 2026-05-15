@@ -186,7 +186,7 @@ export async function searchConfluenceFullText(
     }
 
     const results = data.results ?? [];
-    const out: KnowledgeHit[] = [];
+    const out: ConfluenceWikiHit[] = [];
     for (const item of results) {
       const title = item.title?.trim() || '（无标题）';
       const excerpt = excerptFromItem(item) || '（无摘要）';

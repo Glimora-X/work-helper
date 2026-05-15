@@ -199,6 +199,7 @@ export default function ArtisticAssistant() {
   };
 
   return (
+    <div className="pkmer-page">
     <div className="artistic-assistant">
       <div className="artistic-assistant__inner">
         <PageHeader
@@ -341,6 +342,7 @@ export default function ArtisticAssistant() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

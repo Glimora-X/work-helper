@@ -47,15 +47,16 @@ const actions = [
 
 export default function Dashboard() {
   return (
-    <div className="p-8 md:p-12 max-w-6xl mx-auto">
-      <PageHeader title="控制台" subtitle="管理开发流水线与日常任务" />
+    <div className="pkmer-page">
+      <div className="pkmer-page-inner pkmer-page-inner--wide">
+        <PageHeader title="控制台" subtitle="管理开发流水线与日常任务" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {actions.map((action) => (
           <Link
             key={action.title}
             to={action.path}
-            className="artistic-card group relative flex flex-col p-6 no-underline overflow-hidden"
+            className="pkmer-card group relative flex flex-col p-6 no-underline overflow-hidden"
           >
             {/* Background gradient effect */}
             <div 
@@ -105,6 +106,7 @@ export default function Dashboard() {
             </div>
           </Link>
         ))}
+        </div>
       </div>
     </div>
   );

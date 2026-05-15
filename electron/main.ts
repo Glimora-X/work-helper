@@ -21,19 +21,64 @@ function spaOrigin(): string {
 }
 
 function showOrCreateMainWindow(): void {
+  showOrCreateMainWindowWithPath('/');
+}
+
+function normalizeMainPath(path: string): string {
+  const p = path.trim() || '/';
+  return p.startsWith('/') ? p : `/${p}`;
+}
+
+/** 打开或聚焦主窗并导航到 SPA 路径（含 query），如 `/deploy?fromFloat=1` */
+function showOrCreateMainWindowWithPath(path: string): void {
+  const fullPath = normalizeMainPath(path);
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) {
       mainWindow.restore();
     }
     mainWindow.show();
     mainWindow.focus();
+    void mainWindow.loadURL(`${spaOrigin()}${fullPath}`);
     return;
   }
-  createWindow();
+  createWindow(fullPath);
 }
 
 ipcMain.on('assistant:open-main', () => {
   showOrCreateMainWindow();
+});
+
+ipcMain.on('assistant:open-main-path', (_e, payload: unknown) => {
+  const path =
+    payload &&
+    typeof payload === 'object' &&
+    typeof (payload as {path?: unknown}).path === 'string'
+      ? (payload as {path: string}).path
+      : '/';
+  showOrCreateMainWindowWithPath(path);
+});
+
+ipcMain.on('assistant-float-resize', (_e, payload: unknown) => {
+  if (!floatWindow || floatWindow.isDestroyed()) return;
+  if (!payload || typeof payload !== 'object') return;
+  const rec = payload as {width?: unknown; height?: unknown};
+  const w = Math.round(Number(rec.width));
+  const h = Math.round(Number(rec.height));
+  if (!Number.isFinite(w) || !Number.isFinite(h)) return;
+  const minW = 76;
+  const minH = 76;
+  /** 原先写死 max 520×640，渲染进程传再大也会被截断；改为不超过主屏工作区（留边），与 FloatDock.syncFloatSize 一致 */
+  const {workArea} = screen.getPrimaryDisplay();
+  const edge = 20;
+  const maxW = Math.max(minW, Math.floor(workArea.width - edge));
+  const maxH = Math.max(minH, Math.floor(workArea.height - edge));
+  const nw = Math.min(maxW, Math.max(minW, w));
+  const nh = Math.min(maxH, Math.max(minH, h));
+  const [x, y] = floatWindow.getPosition();
+  const [cw, ch] = floatWindow.getSize();
+  floatWindow.setSize(nw, nh);
+  /** 保持右下角锚定，避免拉高后内容画出屏幕下缘 */
+  floatWindow.setPosition(Math.round(x + cw - nw), Math.round(y + ch - nh));
 });
 
 ipcMain.on('assistant-float-drag', (_e, payload: unknown) => {
@@ -211,13 +256,14 @@ async function startBundledApi(): Promise<void> {
   });
 }
 
-function createWindow(): void {
+function createWindow(initialPath = '/'): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    showOrCreateMainWindow();
+    showOrCreateMainWindowWithPath(initialPath);
     return;
   }
 
   const preloadPath = path.join(distElectronRoot(), 'preload.cjs');
+  const firstUrl = `${spaOrigin()}${normalizeMainPath(initialPath)}`;
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -239,10 +285,10 @@ function createWindow(): void {
   });
 
   if (useViteDevServer) {
-    void mainWindow.loadURL(`${spaOrigin()}/`);
+    void mainWindow.loadURL(firstUrl);
     mainWindow.webContents.openDevTools({mode: 'detach'});
   } else {
-    void mainWindow.loadURL(`${spaOrigin()}/`);
+    void mainWindow.loadURL(firstUrl);
   }
 
   mainWindow.on('closed', () => {
@@ -314,13 +360,13 @@ function createFloatWindow(): void {
     ]).popup({window: floatWindow});
   });
 
-  const floatQuery =
-    process.env.ELECTRON_FLOAT_DEBUG === '1' || useViteDevServer ? '?floatDebug=1' : '';
+  /** 仅显式 ELECTRON_FLOAT_DEBUG=1 时带调试 query 并开 DevTools；普通 vite 开发不再默认打开，避免误触 F12 */
+  const floatQuery = process.env.ELECTRON_FLOAT_DEBUG === '1' ? '?floatDebug=1' : '';
   void floatWindow.loadURL(`${spaOrigin()}/electron-float${floatQuery}`);
   floatWindow.once('ready-to-show', () => {
     if (!floatWindow || floatWindow.isDestroyed()) return;
     floatWindow.show();
-    if (useViteDevServer || process.env.ELECTRON_FLOAT_DEBUG === '1') {
+    if (process.env.ELECTRON_FLOAT_DEBUG === '1') {
       floatWindow.webContents.openDevTools({mode: 'detach'});
     }
     /**

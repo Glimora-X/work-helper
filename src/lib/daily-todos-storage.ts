@@ -4,6 +4,9 @@
 
 export const DAILY_TODOS_STORAGE_KEY = 'assistant-daily-todos-v1';
 
+/** 周五默认待办文案（Tasks 页自动补全，去重按 trim 后全文匹配） */
+export const DEFAULT_FRIDAY_WEEKLY_REPORT_TEXT = '写周报';
+
 export type DailyTodoItem = {
   id: string;
   text: string;
@@ -50,6 +53,27 @@ export function loadDailyTodos(): Record<string, DailyTodoItem[]> {
 
 function persistStore(store: Record<string, DailyTodoItem[]>): void {
   localStorage.setItem(DAILY_TODOS_STORAGE_KEY, JSON.stringify(cleanEmptyDates(store)));
+}
+
+/** 将纯文本加入「今天」的待办；同日 trim 后全文相同视为重复 */
+export function addPlainTextTodoToToday(text: string): { added: boolean; reason?: 'duplicate' | 'empty' } {
+  const t = text.trim();
+  if (!t) return { added: false, reason: 'empty' };
+  const today = todayISODate();
+  const store = loadDailyTodos();
+  const list = store[today] ?? [];
+  if (list.some((item) => item.text.trim() === t)) {
+    return { added: false, reason: 'duplicate' };
+  }
+  const item: DailyTodoItem = {
+    id: crypto.randomUUID(),
+    text: t,
+    done: false,
+    createdAt: Date.now(),
+  };
+  store[today] = [...list, item];
+  persistStore(store);
+  return { added: true };
 }
 
 /** 将 Jira 工单加入「今天」的待办列表；已存在同一 jiraKey 则视为已加入 */

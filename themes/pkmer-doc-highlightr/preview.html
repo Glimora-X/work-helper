@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PKMer 文档 — Highlightr 插件页 · Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=Inter:ital,opsz,wght@0,14..32,400..800;1,14..32,400..800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --canvas:hsl(273,37%,93%);
+  --canvas-end:#fdfeff;
+  --ink:hsl(250,14%,10%);
+  --ink-light:hsl(250,14%,30%);
+  --ink-lighter:hsl(250,14%,40%);
+  --accent:hsl(22,100%,50%);
+  --accent-2:hsl(324,75%,38%);
+  --code-bg:hsl(257,31%,22%);
+  --code-text:hsl(250,14%,95%);
+  --mark-light:#ffff8fd1;
+  --mark-dark:#e95f44cc;
+  --primary-600:#4f46e5;
+  --primary-500:#6366f1;
+  --muted-400:#94a3b8;
+  --muted-700:#334155;
+  --muted-800:#1e293b;
+  --shell:#ffffff;
+  --hairline:hsla(269,79%,54%,0.12);
+  --shadow-nav:0 10px 15px -3px rgba(148,163,184,.3),0 4px 6px -4px rgba(148,163,184,.3);
+  --shadow-panel:0 25px 50px -12px rgba(100,116,139,.2);
+  --r-md:6px;--r-lg:8px;--r-xl:12px;--r-2xl:16px;--r-pill:9999px;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:Inter,system-ui,sans-serif;
+  background:linear-gradient(180deg,var(--canvas) 0%,var(--canvas) 120px,var(--canvas-end) 100%);
+  color:var(--ink);
+  font-size:16px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.page{max-width:960px;margin:0 auto;padding:0 24px 100px}
+.nav{
+  display:flex;justify-content:space-between;align-items:center;
+  height:64px;padding:0 16px;position:sticky;top:0;z-index:100;
+  background:rgba(255,255,255,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--hairline);
+  margin:0 -24px 32px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.5);
+}
+.nav-left{display:flex;align-items:center;gap:14px}
+.nav-wordmark{
+  font-size:18px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted-800);text-decoration:none;
+}
+.nav-tag{
+  font-size:11px;font-weight:600;color:var(--primary-600);
+  background:rgba(99,102,241,.08);padding:4px 10px;border-radius:var(--r-pill);
+  border:1px solid rgba(99,102,241,.2);
+}
+.nav-right{display:flex;align-items:center;gap:6px}
+.nav-link{
+  font-size:13px;font-weight:500;color:var(--muted-400);text-decoration:none;
+  padding:8px 12px;border-radius:var(--r-lg);transition:color .2s,background .2s;
+}
+.nav-link:hover{color:var(--muted-700);background:rgba(148,163,184,.12)}
+.nav-link--active{color:var(--primary-600);font-weight:600}
+.section{padding:56px 0 0;border-top:1px solid var(--hairline);margin-top:48px}
+.section:first-of-type{border-top:none;margin-top:0}
+.section-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2);margin-bottom:8px}
+.section-title{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.2;color:var(--ink)}
+.section-desc{font-size:15px;color:var(--ink-light);margin-top:10px;max-width:560px}
+.hero{padding:48px 0 32px}
+.hero-label{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+.hero-title{font-size:clamp(32px,5vw,44px);font-weight:700;line-height:1.1;letter-spacing:-.03em;color:var(--ink)}
+.hero-title em{font-style:normal;color:var(--primary-600)}
+.hero-subtitle{font-size:16px;line-height:1.65;color:var(--ink-light);margin-top:16px;max-width:520px}
+.hero-tags{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.hero-tag{font-size:11px;font-weight:500;color:var(--ink-lighter);background:rgba(255,255,255,.7);padding:5px 11px;border-radius:var(--r-pill);border:1px solid var(--hairline)}
+.hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;line-height:1;padding:9px 18px;border-radius:var(--r-lg);cursor:pointer;text-decoration:none;transition:opacity .15s,transform .15s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--primary-600);color:#fff;border:1px solid transparent}
+.btn-primary:hover{opacity:.9}
+.btn-secondary{background:#fff;color:var(--ink);border:1px solid var(--hairline)}
+.btn-secondary:hover{border-color:var(--muted-400)}
+.color-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-top:24px}
+.color-token{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-2xl);overflow:hidden}
+.color-swatch{height:72px}
+.color-info{padding:12px 14px}
+.color-name{font-size:13px;font-weight:600;color:var(--ink)}
+.color-hex{font-size:11px;color:var(--ink-light);margin-top:2px;font-variant-numeric:tabular-nums}
+.color-role{font-size:11px;color:var(--ink-lighter);margin-top:6px;line-height:1.35}
+.gradient-demo{margin-top:20px;border-radius:var(--r-2xl);min-height:100px;border:1px solid var(--hairline);background:linear-gradient(180deg,var(--canvas) 0%,var(--canvas-end) 100%);padding:20px}
+.type-table{margin-top:20px;border:1px solid var(--hairline);border-radius:var(--r-2xl);overflow:hidden;background:#fff}
+.type-row{display:grid;grid-template-columns:90px 1fr 160px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--hairline);gap:12px}
+.type-row:last-child{border-bottom:none}
+.type-meta{font-size:10px;font-weight:600;color:var(--primary-600);text-transform:uppercase}
+.type-sample{color:var(--ink);font-family:Inter,sans-serif}
+.type-specs{font-size:11px;color:var(--ink-light);text-align:right;font-variant-numeric:tabular-nums}
+.spacing-bars{display:flex;align-items:flex-end;gap:16px;height:100px;margin-top:20px}
+.spacing-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+.spacing-bar{width:100%;border-radius:var(--r-md);background:linear-gradient(180deg,var(--primary-500),var(--accent-2));opacity:.35}
+.spacing-val{font-size:11px;font-weight:600}
+.spacing-name{font-size:10px;color:var(--ink-lighter)}
+.shapes-row{display:flex;flex-wrap:wrap;gap:20px;margin-top:20px;align-items:flex-end}
+.shape-box{width:64px;height:64px;background:var(--code-bg);border:1px solid var(--hairline)}
+.shape-label{font-size:11px;color:var(--ink-light);margin-top:6px;text-align:center}
+.component-card{background:#fff;border:1px solid var(--hairline);border-radius:var(--r-2xl);padding:24px;margin-top:16px}
+.component-name{font-size:15px;font-weight:600}
+.component-role{font-size:12px;color:var(--ink-light);margin-top:4px}
+.component-preview{margin-top:16px;padding:18px;background:var(--canvas);border-radius:var(--r-xl);border:1px dashed var(--hairline)}
+mark.doc-mark{background:var(--mark-light);margin:0 -0.05em;padding:.1em .4em;border-radius:.6em .3em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.dark-mark-demo{background:var(--mark-dark);color:#fff;padding:.1em .4em;border-radius:.6em .3em;display:inline-block;margin-left:8px}
+.code-block{font-family:"IBM Plex Mono",monospace;font-size:13px;background:var(--code-bg);color:var(--code-text);padding:14px 16px;border-radius:var(--r-lg);margin-top:10px}
+.guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+.guide-card{border-radius:var(--r-2xl);padding:22px;border:1px solid var(--hairline)}
+.guide-card--do{background:rgba(79,70,229,.04);border-color:rgba(79,70,229,.18)}
+.guide-card--dont{background:rgba(234,88,12,.05);border-color:rgba(234,88,12,.15)}
+.guide-label{font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:12px}
+.guide-card--do .guide-label{color:var(--primary-600)}
+.guide-card--dont .guide-label{color:var(--accent)}
+.guide-list{list-style:none;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--ink-light);line-height:1.45}
+.guide-list li{padding-left:18px;position:relative}
+.guide-card--do li::before{content:"✓";position:absolute;left:0;color:var(--primary-600);font-weight:700}
+.guide-card--dont li::before{content:"✕";position:absolute;left:0;color:var(--accent);font-weight:700}
+.footer{margin-top:72px;padding:24px 0;border-top:1px solid var(--hairline);font-size:13px;color:var(--ink-lighter);display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+.footer a{color:var(--primary-600);text-decoration:none}
+.footer a:hover{text-decoration:underline}
+.section,.hero{opacity:0;transform:translateY(16px);transition:opacity .5s ease,transform .5s ease}
+.section.visible,.hero.visible{opacity:1;transform:none}
+@media(max-width:768px){
+  .page{padding:0 16px 80px}
+  .nav{margin:0 -16px 24px}
+  .type-row{grid-template-columns:1fr;gap:4px}
+  .type-specs{text-align:left}
+  .guide-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="nav">
+    <div class="nav-left">
+      <a href="#" class="nav-wordmark">PKMer</a>
+      <span class="nav-tag">Design System</span>
+    </div>
+    <div class="nav-right">
+      <a href="#colors" class="nav-link nav-link--active">颜色</a>
+      <a href="#type" class="nav-link">字体</a>
+      <a href="#components" class="nav-link">组件</a>
+      <a href="#guides" class="nav-link">规范</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-label">文档页提取</div>
+    <h1 class="hero-title">Highlightr 插件文档<br><em>视觉系统</em></h1>
+    <p class="hero-subtitle">源自 pkmer.cn 文档区 theme.css 与全站 Tailwind 外壳。淡紫灰阅读面、靛蓝导航轨、琥珀品牌点缀。</p>
+    <div class="hero-tags">
+      <span class="hero-tag">DESIGN.md</span>
+      <span class="hero-tag">tokens.json</span>
+      <span class="hero-tag">variables.css</span>
+      <span class="hero-tag">theme.css</span>
+    </div>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="DESIGN.md" download>DESIGN.md</a>
+      <a class="btn btn-secondary" href="tokens.json" download>tokens.json</a>
+      <a class="btn btn-secondary" href="variables.css" download>variables.css</a>
+      <a class="btn btn-secondary" href="theme.css" download>theme.css</a>
+    </div>
+  </header>
+
+  <section class="section" id="colors">
+    <div class="section-label">Foundation</div>
+    <h2 class="section-title">颜色 token</h2>
+    <p class="section-desc">文档轨（紫灰底、橙强调）与外壳轨（Indigo primary、Slate muted）分层列出。</p>
+    <div class="color-grid">
+      <div class="color-token"><div class="color-swatch" style="background:hsl(273,37%,93%)"></div><div class="color-info"><div class="color-name">Doc Canvas</div><div class="color-hex">hsl(273,37%,93%)</div><div class="color-role">正文区主背景</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:#fdfeff"></div><div class="color-info"><div class="color-name">Gradient End</div><div class="color-hex">#fdfeff</div><div class="color-role">渐变底部提亮</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:hsl(250,14%,10%)"></div><div class="color-info"><div class="color-name">Ink</div><div class="color-hex">≈灰10%</div><div class="color-role">正文主色</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:hsl(22,100%,50%)"></div><div class="color-info"><div class="color-name">Accent</div><div class="color-hex">hsl(22,100%,50%)</div><div class="color-role">链接 / 强调</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:hsl(257,31%,22%)"></div><div class="color-info"><div class="color-name">Code BG</div><div class="color-hex">hsl(257,31%,22%)</div><div class="color-role">代码块沉面</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:#ffff8fd1"></div><div class="color-info"><div class="color-name">Mark Light</div><div class="color-hex">#ffff8fd1</div><div class="color-role">浅色 mark</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:#4f46e5"></div><div class="color-info"><div class="color-name">Primary 600</div><div class="color-hex">#4f46e5</div><div class="color-role">导航 active</div></div></div>
+      <div class="color-token"><div class="color-swatch" style="background:#ffffff;border-bottom:1px solid #e2e8f0"></div><div class="color-info"><div class="color-name">Shell</div><div class="color-hex">#ffffff</div><div class="color-role">顶栏 / 卡片</div></div></div>
+    </div>
+    <div class="gradient-demo">
+      <strong>文档垂直渐变</strong>（示意）：canvas 顶部 120px 保持紫灰，再过渡到 #fdfeff，与固定顶栏 + 移动 TOC 的源站逻辑一致。
+    </div>
+  </section>
+
+  <section class="section" id="type">
+    <div class="section-label">Typography</div>
+    <h2 class="section-title">字体与字号</h2>
+    <p class="section-desc">Inter 作为实现替代；等宽使用 IBM Plex Mono 对应源站 IBM Plex Mono 栈。</p>
+    <div class="type-table">
+      <div class="type-row"><span class="type-meta">Base</span><span class="type-sample" style="font-size:1rem">正文 1rem / 中文混排示例 Text 高亮说明。</span><span class="type-specs">1rem / 1.5</span></div>
+      <div class="type-row"><span class="type-meta">Sm</span><span class="type-sample" style="font-size:.9375rem">侧栏与辅助说明字号。</span><span class="type-specs">0.9375rem</span></div>
+      <div class="type-row"><span class="type-meta">Wordmark</span><span class="type-sample" style="font-size:1.125rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase">PKMer</span><span class="type-specs">1.125rem / 800</span></div>
+    </div>
+    <div class="spacing-bars">
+      <div class="spacing-col"><div class="spacing-bar" style="height:16px"></div><span class="spacing-val">16</span><span class="spacing-name">gap</span></div>
+      <div class="spacing-col"><div class="spacing-bar" style="height:24px"></div><span class="spacing-val">24</span><span class="spacing-name">section</span></div>
+      <div class="spacing-col"><div class="spacing-bar" style="height:32px"></div><span class="spacing-val">32</span><span class="spacing-name">hero</span></div>
+    </div>
+    <div class="shapes-row">
+      <div><div class="shape-box" style="border-radius:6px"></div><div class="shape-label">md 6px</div></div>
+      <div><div class="shape-box" style="border-radius:12px"></div><div class="shape-label">xl 12px</div></div>
+      <div><div class="shape-box" style="border-radius:16px"></div><div class="shape-label">2xl 16px</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="components">
+    <div class="section-label">Components</div>
+    <h2 class="section-title">正文 mark 与代码</h2>
+    <p class="section-desc">与 <code style="font-family:IBM Plex Mono,monospace;font-size:13px">theme.css</code> 中 mark 规则对齐。</p>
+    <div class="component-card">
+      <div class="component-name">Mark（浅色）</div>
+      <div class="component-role">Highlightr / 默认 markdown 高亮参考</div>
+      <div class="component-preview">
+        在笔记中<mark class="doc-mark">高亮关键句</mark>，并对比深色模式<span class="dark-mark-demo">深色 mark</span>。
+      </div>
+      <div class="code-block">--theme-bg: hsl(273, 37%, 93%);<br>mark { background: #ffff8fd1; border-radius: 0.6em 0.3em; }</div>
+    </div>
+    <div class="component-card">
+      <div class="component-name">导航阴影</div>
+      <div class="component-role">滚动后顶栏 — nav-elevated</div>
+      <div class="component-preview" style="box-shadow:var(--shadow-nav);background:#fff;border-radius:12px;padding:14px 18px">
+        模拟滚动后的白底顶栏与 slate 阴影。
+      </div>
+    </div>
+    <div class="component-card">
+      <div class="component-name">巨型菜单卡片</div>
+      <div class="component-role">megamenu — rounded-2xl + panel shadow</div>
+      <div class="component-preview" style="box-shadow:var(--shadow-panel);background:#fff;border-radius:16px;max-width:320px">
+        白底、1rem 圆角、柔和 slate 投影。
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="guides">
+    <div class="section-label">Guides</div>
+    <h2 class="section-title">Do / Don’t</h2>
+    <p class="section-desc">每条规则绑定具体 token，避免空泛建议。</p>
+    <div class="guide-grid">
+      <div class="guide-card guide-card--do">
+        <div class="guide-label">推荐</div>
+        <ul class="guide-list">
+          <li>长文区使用 hsl(273,37%,93%) 与 #fdfeff 垂直渐变。</li>
+          <li>链接与强调使用 hsl(22,100%,50%)。</li>
+          <li>代码块使用 hsl(257,31%,22%) 背景与浅灰前景。</li>
+          <li>导航 active 使用 #4f46e5 与 3px 底指示条。</li>
+        </ul>
+      </div>
+      <div class="guide-card guide-card--dont">
+        <div class="guide-label">避免</div>
+        <ul class="guide-list">
+          <li>勿把 #4f46e5 大块铺进正文区背景。</li>
+          <li>勿在浅色模式用 #e95f44cc 作为唯一正文高亮（除非深色模式）。</li>
+          <li>勿移除 mark 的 box-decoration-break: clone。</li>
+          <li>勿用随机 Indigo 替代编译确认的 primary 家族。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>来源页面：<a href="https://pkmer.cn/Pkmer-Docs/10-obsidian/obsidian%E7%A4%BE%E5%8C%BA%E6%8F%92%E4%BB%B6/highlightr-plugin/" target="_blank" rel="noopener">Highlightr 插件文档</a></span>
+    <span>rico-design-md 技能生成 · 本地预览</span>
+  </footer>
+</div>
+<script>
+(function(){
+  var els=document.querySelectorAll('.section,.hero');
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting) e.target.classList.add('visible'); });
+  },{threshold:.12});
+  els.forEach(function(el){ obs.observe(el); });
+  document.querySelector('.hero').classList.add('visible');
+})();
+</script>
+</body>
+</html>

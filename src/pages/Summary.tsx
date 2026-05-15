@@ -329,19 +329,21 @@ export default function Summary() {
   const serverUrl = status?.serverUrl;
 
   return (
-    <div className="p-8 md:p-12 max-w-6xl mx-auto">
+    <div className="pkmer-page">
+      <div className="pkmer-page-inner pkmer-page-inner--wide">
       <PageHeader
         title="总结与周报"
         subtitle="拉取 Jira 指派给你的待办，并按自然周生成周报草稿（与 MCP chanjet-jira 同源配置）"
       />
 
       {statusLoading ? (
-        <div className="artistic-card p-8 flex items-center gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <div className="pkmer-card flex shrink-0 items-center gap-3 p-8 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <Loader2 className="w-5 h-5 animate-spin shrink-0" />
           正在检查 Jira 配置…
         </div>
       ) : !status?.configured ? (
-        <div className="artistic-card p-8 space-y-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="pkmer-card space-y-3 p-8 text-sm" style={{ color: 'var(--text-secondary)' }}>
           {isDeployApiConnectivityHint(status?.hint) ? (
             <>
               <p className="font-medium" style={{ color: 'var(--text-primary)' }}>
@@ -387,9 +389,10 @@ export default function Summary() {
             </p>
           ) : null}
         </div>
+        </div>
       ) : (
-        <div className="space-y-8">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="pkmer-content-fill overflow-hidden">
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
             <span className="text-xs font-mono uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Jira 已连接 ·{' '}
               {status.mode === 'user_password' ? '用户名+密码' : '用户名+API Token'}
@@ -409,7 +412,8 @@ export default function Summary() {
             </button>
           </div>
 
-          <section className="artistic-card overflow-hidden">
+          <div className="min-h-0 flex-1 space-y-8 overflow-y-auto pb-2 pr-1">
+          <section className="pkmer-card overflow-hidden">
             <div
               className="flex items-center justify-between gap-4 px-6 py-4 border-b"
               style={{ borderColor: 'var(--border-light)', background: 'var(--bg-secondary)' }}
@@ -559,7 +563,7 @@ export default function Summary() {
             </div>
           </section>
 
-          <section className="artistic-card overflow-hidden">
+          <section className="pkmer-card overflow-hidden">
             <div
               className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b"
               style={{ borderColor: 'var(--border-light)', background: 'var(--bg-secondary)' }}
@@ -640,7 +644,9 @@ export default function Summary() {
             </div>
           </section>
         </div>
+        </div>
       )}
+      </div>
     </div>
   );
 }

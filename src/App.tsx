@@ -4,6 +4,7 @@ import {
   FileText,
   Library,
   Rocket,
+  Settings as SettingsIcon,
   Sparkles,
   Trash2,
   Zap,
@@ -21,6 +22,7 @@ import Startup from './pages/Startup';
 import SkillsLibrary from './pages/SkillsLibrary';
 
 const ArtisticAssistant = lazy(() => import('./pages/ArtisticAssistant'));
+import Settings from './pages/Settings';
 import Summary from './pages/Summary';
 import Tasks from './pages/Tasks';
 
@@ -41,6 +43,7 @@ export const navItems: NavItem[] = [
   { name: '启动', path: '/startup', icon: Zap },
   { name: '自动化', path: '/automations', icon: Bot },
   { name: '总结', path: '/summary', icon: FileText },
+  { name: '设置', path: '/settings', icon: SettingsIcon },
 ];
 
 export function TopNav() {
@@ -61,7 +64,6 @@ export function TopNav() {
                 aria-current={isActive ? 'page' : undefined}
                 className="top-nav-link"
               >
-                {isActive ? <span aria-hidden="true" className="top-nav-current-dot" /> : null}
                 <Icon className="top-nav-icon h-4 w-4 shrink-0" />
                 <span>{item.name}</span>
               </Link>
@@ -83,6 +85,7 @@ export function AppRoutes() {
       <Route path="/automations" element={<Automations />} />
       <Route path="/cleanup" element={<Cleanup />} />
       <Route path="/summary" element={<Summary />} />
+      <Route path="/settings" element={<Settings />} />
       <Route path="/tasks" element={<Tasks />} />
       <Route path="/skills" element={<SkillsLibrary />} />
       <Route
@@ -90,7 +93,7 @@ export function AppRoutes() {
         element={
           <Suspense
             fallback={
-              <div className="flex flex-1 min-h-[40vh] items-center justify-center text-sm" style={{color: 'var(--text-muted)'}}>
+              <div className="pkmer-page flex flex-1 min-h-[40vh] items-center justify-center text-sm" style={{color: 'var(--text-muted)'}}>
                 加载Dottie-Assistant…
               </div>
             }
