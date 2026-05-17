@@ -16,24 +16,38 @@
 - [package.json](file://package.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced conversational interface architecture documentation with detailed UI data flow
+- Expanded knowledge base integration coverage for multiple data sources
+- Added comprehensive skill system design patterns documentation
+- Updated architectural diagrams to reflect current system structure
+- Enhanced troubleshooting guides with specific error scenarios
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Conversational Interface Architecture](#conversational-interface-architecture)
+7. [Knowledge Base Integration](#knowledge-base-integration)
+8. [Skill System Design Patterns](#skill-system-design-patterns)
+9. [Dependency Analysis](#dependency-analysis)
+10. [Performance Considerations](#performance-considerations)
+11. [Troubleshooting Guide](#troubleshooting-guide)
+12. [Conclusion](#conclusion)
+13. [Appendices](#appendices)
 
 ## Introduction
-This document explains the AI assistant system that powers conversational AI, integrates local AI models, external MCP (Model Context Protocol) servers, and a skills library. It covers:
+This document explains the AI assistant system that powers conversational AI, integrates local AI models, external MCP (Model Context Protocol) servers, and a skills library. The system has been comprehensively updated to include detailed architectural documentation covering:
+
+- **Conversational Interface Architecture**: Complete UI data flow within ArtisticAssistant system with message handling, context injection, and response generation
+- **Knowledge Base Integration**: Multi-source knowledge retrieval from local files, Confluence, and HTTP bridge endpoints
+- **Skill System Design Patterns**: Comprehensive skill discovery mechanisms, registration processes, and invocation workflows
 - Local model discovery and lifecycle management
 - Skills scanning and markdown-based capability definition
 - MCP server configuration and discovery
-- Conversational interface with message handling, context injection, and response generation
 - AI assistant UI including chat interface, message history, and user interaction patterns
 - Skill development framework with markdown specifications
 - Performance optimization, memory management, and resource allocation
@@ -41,25 +55,32 @@ This document explains the AI assistant system that powers conversational AI, in
 
 ## Project Structure
 The system is split into:
-- Frontend React pages for UI and interactions
+- Frontend React pages for UI and interactions with comprehensive state management
 - Backend Express server exposing APIs for assistant chat, knowledge search, and resource discovery
 - Utility modules for local model scanning, skills parsing, MCP configuration discovery, and knowledge retrieval
 
 ```mermaid
 graph TB
-subgraph "Frontend"
+subgraph "Frontend - ArtisticAssistant UI"
 AA["ArtisticAssistant.tsx"]
 SL["SkillsLibrary.tsx"]
 CSS1["ArtisticAssistant.css"]
 CSS2["SkillsLibrary.css"]
 end
-subgraph "Backend"
+subgraph "Backend - API Layer"
 API["deploy-api.ts"]
 AC["assistant-chat.ts"]
 KM["knowledge-search.ts"]
 LM["local-models.ts"]
 LS["local-skills.ts"]
 MC["local-mcp.ts"]
+end
+subgraph "External Integrations"
+OLL["Ollama"]
+GEM["Gemini"]
+OAI["OpenAI"]
+CF["Confluence"]
+HTTP["HTTP Bridges"]
 end
 AA --> API
 SL --> API
@@ -68,6 +89,11 @@ API --> KM
 API --> LM
 API --> LS
 API --> MC
+AC --> OLL
+AC --> GEM
+AC --> OAI
+KM --> CF
+KM --> HTTP
 ```
 
 **Diagram sources**
@@ -84,12 +110,13 @@ API --> MC
 - [SkillsLibrary.tsx:202-599](file://src/pages/SkillsLibrary.tsx#L202-L599)
 
 ## Core Components
-- Local model manager: scans Ollama and LM Studio models, deduplicates, and exposes model lists
-- Skills manager: discovers SKILL.md files across common agent skill directories, parses frontmatter and extracts intros
-- MCP manager: reads Cursor MCP configuration files and surfaces server entries
-- Assistant chat: orchestrates provider selection (Ollama/Gemini/OpenAI), builds system prompts, injects knowledge, and returns responses
-- Knowledge search: searches local directories, Confluence, and HTTP bridges for contextual snippets
-- UI pages: assistant chat and skills library with filtering, previews, and copy actions
+- **Local Model Manager**: scans Ollama and LM Studio models, deduplicates, and exposes model lists with size information
+- **Skills Manager**: discovers SKILL.md files across common agent skill directories, parses frontmatter and extracts intros
+- **MCP Manager**: reads Cursor MCP configuration files and surfaces server entries with command/url/args preview
+- **Assistant Chat**: orchestrates provider selection (Ollama/Gemini/OpenAI), builds system prompts, injects knowledge, and returns responses
+- **Knowledge Search**: searches local directories, Confluence, and HTTP bridges for contextual snippets with comprehensive error handling
+- **UI Pages**: assistant chat and skills library with filtering, previews, and copy actions with real-time state management
+- **Conversational Interface**: sophisticated message handling with knowledge source attribution and interactive previews
 
 **Section sources**
 - [local-models.ts:124-177](file://server/local-models.ts#L124-L177)
@@ -107,7 +134,7 @@ The backend exposes REST endpoints for:
 - Performing knowledge search
 - Running assistant chat with provider-specific logic
 
-The frontend pages consume these endpoints to render the UI and manage user interactions.
+The frontend pages consume these endpoints to render the UI and manage user interactions with sophisticated state management and real-time updates.
 
 ```mermaid
 sequenceDiagram
@@ -138,13 +165,14 @@ UI->>UI : update messages, show sources
 ## Detailed Component Analysis
 
 ### Local Model Management
-- Discovery sources:
+- **Discovery Sources**:
   - Ollama via CLI list and manifest cache
   - LM Studio .gguf files under platform-specific cache directories
-- Deduplication and normalization:
+- **Deduplication and Normalization**:
   - Uses name or absolute path key to avoid duplicates
   - Sorts results by locale-aware name
-- Output:
+  - Computes file sizes for LM Studio models
+- **Output**:
   - List of models with source, name, optional size note, and path
 
 ```mermaid
@@ -174,14 +202,14 @@ Sort --> End(["Return models + rootsTried + warnings"])
 - [local-models.ts:124-177](file://server/local-models.ts#L124-L177)
 
 ### Skills Library and Markdown Specification
-- Discovery:
+- **Discovery**:
   - Scans common agent skill directories (Claude, Cursor, Agents, Codex)
   - Walks up to a fixed depth, skipping common folders
   - Requires a SKILL.md file to be considered a skill
-- Parsing:
+- **Parsing**:
   - Extracts frontmatter name/description
   - Falls back to first paragraph as intro, cleaning markdown noise
-- Output:
+- **Output**:
   - Display name, description, and filesystem paths for UI cards
 
 ```mermaid
@@ -212,11 +240,13 @@ Sort --> E(["Return skills + rootsTried + warnings"])
 - [skill.md:1-89](file://skill.md#L1-L89)
 
 ### MCP Server Integration
-- Scans two locations:
+- **Scans Two Locations**:
   - User-level Cursor MCP config
   - Project-level Cursor MCP config (skipped if identical to user-level)
-- Parses JSON for mcpServers object and collects entries with command/url/args preview
-- Outputs server entries grouped by kind and sorted
+- **Parsing**:
+  - Parses JSON for mcpServers object and collects entries with command/url/args preview
+- **Output**:
+  - Server entries grouped by kind and sorted
 
 ```mermaid
 flowchart TD
@@ -241,14 +271,14 @@ Sort --> R(["Return servers + configsTried + warnings"])
 - [local-mcp.ts:71-105](file://server/local-mcp.ts#L71-L105)
 
 ### Conversational Interface and Message Handling
-- Provider routing:
+- **Provider Routing**:
   - Ollama: posts to /api/chat with model and messages
   - Gemini: calls Generative Language API with systemInstruction and contents
   - OpenAI: calls chat/completions with Authorization header
-- Context management:
+- **Context Management**:
   - Builds a knowledge block from search results and injects into system prompt
   - Filters dialog to user/assistant roles
-- Response generation:
+- **Response Generation**:
   - Returns reply, knowledgeHits, and warnings
   - Provides model options list for UI selection
 
@@ -289,16 +319,16 @@ API-->>UI : AssistantChatResponse
 - [assistant-chat.ts:204-214](file://server/assistant-chat.ts#L204-L214)
 
 ### Knowledge Search and Context Injection
-- Local search:
+- **Local Search**:
   - Walks configured directories up to a depth limit
   - Skips common folders and large files
   - Matches query terms against file content and extracts excerpts
-- Remote bridges:
+- **Remote Bridges**:
   - Supports multiple HTTP endpoints (template-based)
   - Normalizes results into KnowledgeHit
-- Confluence:
+- **Confluence Integration**:
   - Optional full-text search via CQL when configured
-- Limits and warnings:
+- **Limits and Warnings**:
   - Caps hits and files scanned
   - Emits warnings for misconfiguration and errors
 
@@ -332,14 +362,15 @@ Limit --> Ret["return {hits, warnings}"]
 - [knowledge-search.ts:318-332](file://server/knowledge-search.ts#L318-L332)
 
 ### AI Assistant UI Component
-- ArtisticAssistant page:
-  - Loads assistant options and model choices
+- **ArtisticAssistant Page**:
+  - Loads assistant options and model choices with real-time state management
   - Composes messages, toggles knowledge retrieval, and sends requests
   - Renders message bubbles, shows knowledge sources, and handles errors
-- SkillsLibrary page:
+  - Provides interactive previews and knowledge source attribution
+- **SkillsLibrary Page**:
   - Fetches skills, MCP, and models concurrently
   - Provides filtering by source/kind/source, search, and refresh
-  - Copies file paths to clipboard
+  - Copies file paths to clipboard with visual feedback
 
 ```mermaid
 classDiagram
@@ -372,33 +403,169 @@ SkillsLibrary --> "calls" deploy-api.ts
 - [SkillsLibrary.css:1-593](file://src/pages/SkillsLibrary.css#L1-L593)
 
 ### Skill Development Framework
-- Place a SKILL.md in one of the recognized directories:
+- **Placement**: Place a SKILL.md in one of the recognized directories:
   - Claude: ~/.claude/skills
   - Cursor: ~/.cursor/skills-cursor
   - Agents: ~/.agents/skills
   - Codex: ~/.codex/skills
-- Markdown specification:
-  - Use frontmatter with name and description
+- **Specification**: Use frontmatter with name and description
   - Use a descriptive body explaining mission, rules, and expected output structure
-- The system scans and surfaces the skill with display name, description, and path
+- **System Integration**: The system scans and surfaces the skill with display name, description, and path
 
 **Section sources**
 - [local-skills.ts:211-227](file://server/local-skills.ts#L211-L227)
 - [skill.md:1-89](file://skill.md#L1-L89)
 
+## Conversational Interface Architecture
+
+### Data Flow Within ArtisticAssistant UI System
+The ArtisticAssistant UI implements a sophisticated conversational interface with comprehensive state management and real-time updates:
+
+- **State Management**: Centralized state for messages, model selection, knowledge retrieval toggle, and loading states
+- **Message Composition**: Converts UI messages to API-compatible format with role filtering
+- **Knowledge Integration**: Optional knowledge base search with preview functionality
+- **Provider Selection**: Dynamic model choice with validation and default fallbacks
+- **Response Handling**: Rich response processing with knowledge source attribution
+
+```mermaid
+flowchart TD
+UI["ArtisticAssistant.tsx"] --> State["State Management"]
+State --> Options["Load Options"]
+State --> Messages["Manage Messages"]
+State --> Model["Model Selection"]
+State --> KB["Knowledge Toggle"]
+UI --> API["deploy-api.ts"]
+API --> Chat["assistant-chat.ts"]
+API --> Knowledge["knowledge-search.ts"]
+Chat --> Providers["Provider Routing"]
+Providers --> Ollama["Ollama"]
+Providers --> Gemini["Gemini"]
+Providers --> OpenAI["OpenAI"]
+Knowledge --> Local["Local Search"]
+Knowledge --> Confluence["Confluence"]
+Knowledge --> HTTP["HTTP Bridges"]
+```
+
+**Diagram sources**
+- [ArtisticAssistant.tsx:70-174](file://src/pages/ArtisticAssistant.tsx#L70-L174)
+- [assistant-chat.ts:160-202](file://server/assistant-chat.ts#L160-L202)
+- [knowledge-search.ts:260-332](file://server/knowledge-search.ts#L260-L332)
+
+### Message Handling and Context Management
+- **Message Filtering**: Only user/assistant roles are passed to providers
+- **Knowledge Injection**: Knowledge blocks are built and injected into system prompts
+- **Context Preservation**: Maintains conversation history while applying knowledge context
+- **Error Handling**: Comprehensive error propagation with user-friendly messages
+
+**Section sources**
+- [ArtisticAssistant.tsx:115-174](file://src/pages/ArtisticAssistant.tsx#L115-L174)
+- [assistant-chat.ts:30-45](file://server/assistant-chat.ts#L30-L45)
+- [assistant-chat.ts:160-202](file://server/assistant-chat.ts#L160-L202)
+
+## Knowledge Base Integration
+
+### Multi-Source Knowledge Retrieval
+The system provides comprehensive knowledge base integration supporting multiple data sources:
+
+- **Local File System**: Configurable directory scanning with intelligent filtering
+- **Confluence Integration**: Full-text search via CQL when properly configured
+- **HTTP Bridge Endpoints**: Flexible template-based HTTP search endpoints
+- **Cross-Platform Support**: Unified KnowledgeHit interface across all sources
+
+### Knowledge Hit Normalization
+All knowledge sources are normalized into a unified format:
+
+```mermaid
+classDiagram
+class KnowledgeHit {
++string title
++string excerpt
++string source
++string kind
+}
+class LocalSource {
++string title
++string excerpt
++string source
++string kind
+}
+class WikiSource {
++string title
++string excerpt
++string source
++string kind
+}
+KnowledgeHit <|-- LocalSource
+KnowledgeHit <|-- WikiSource
+```
+
+**Diagram sources**
+- [knowledge-search.ts:17-27](file://server/knowledge-search.ts#L17-L27)
+
+### Configuration and Templates
+- **ASSISTANT_KB_LOCAL_DIRS**: Colon/semicolon/newline separated directory list
+- **ASSISTANT_KB_SEARCH_URLS**: Multiple HTTP templates separated by semicolons
+- **ASSISTANT_WIKI_SEARCH_URL_TEMPLATE**: Legacy single endpoint template
+- **CONFLUENCE_BASE_URL & CONFLUENCE_API_TOKEN**: Confluence authentication
+
+**Section sources**
+- [knowledge-search.ts:29-37](file://server/knowledge-search.ts#L29-L37)
+- [knowledge-search.ts:137-157](file://server/knowledge-search.ts#L137-L157)
+- [knowledge-search.ts:155-157](file://server/knowledge-search.ts#L155-L157)
+
+## Skill System Design Patterns
+
+### Discovery Mechanisms
+The skill system implements a robust discovery pattern:
+
+- **Multi-Platform Support**: Recognizes skills from Claude, Cursor, Agents, and Codex ecosystems
+- **Hierarchical Organization**: Skills organized in flat directory structure with SKILL.md files
+- **Recursive Scanning**: Deep directory traversal with configurable depth limits
+- **Intelligent Filtering**: Automatic exclusion of common development directories
+
+### Registration and Invocation Workflows
+Skills are processed through a standardized pipeline:
+
+```mermaid
+flowchart LR
+Discovery["Skill Discovery"] --> Parsing["Frontmatter Parsing"]
+Parsing --> Extraction["Intro Extraction"]
+Extraction --> Normalization["Display Name Normalization"]
+Normalization --> Storage["Skill Registry"]
+Storage --> Invocation["Skill Invocation"]
+```
+
+**Diagram sources**
+- [local-skills.ts:124-197](file://server/local-skills.ts#L124-L197)
+- [local-skills.ts:205-236](file://server/local-skills.ts#L205-L236)
+
+### Markdown Specification Standards
+Skills follow a standardized markdown format:
+
+- **Frontmatter**: YAML with name and description fields
+- **Body Content**: Structured guidance with clear sections
+- **Examples**: Concrete implementation examples and constraints
+- **Quality Gates**: Accessibility and consistency requirements
+
+**Section sources**
+- [local-skills.ts:39-57](file://server/local-skills.ts#L39-L57)
+- [local-skills.ts:75-122](file://server/local-skills.ts#L75-L122)
+- [skill.md:1-89](file://skill.md#L1-L89)
+
 ## Dependency Analysis
-- Backend endpoints depend on:
-  - assistant-chat for provider orchestration
-  - knowledge-search for context retrieval
-  - local-* modules for resource discovery
-- Frontend pages depend on:
-  - deploy-api endpoints for data and actions
-- External integrations:
-  - Ollama HTTP API
-  - Gemini Generative Language API
-  - OpenAI chat/completions
-  - Confluence REST API (optional)
-  - HTTP bridges for wiki search
+- **Backend Dependencies**:
+  - assistant-chat depends on knowledge-search for context retrieval
+  - knowledge-search depends on confluence-search for remote integration
+  - local-* modules provide resource discovery for UI consumption
+- **Frontend Dependencies**:
+  - ArtisticAssistant consumes deploy-api endpoints for chat functionality
+  - SkillsLibrary consumes deploy-api endpoints for resource discovery
+- **External Integrations**:
+  - Ollama HTTP API for local model inference
+  - Gemini Generative Language API for cloud inference
+  - OpenAI chat/completions for cloud inference
+  - Confluence REST API for enterprise knowledge
+  - HTTP bridges for custom knowledge sources
 
 ```mermaid
 graph LR
@@ -427,32 +594,46 @@ KM --> BR["HTTP Bridges"]
 - [knowledge-search.ts:137-157](file://server/knowledge-search.ts#L137-L157)
 
 ## Performance Considerations
-- Resource scanning limits:
+- **Resource Scanning Limits**:
   - Depth caps during local directory walks and file size checks
   - Maximum files and hits caps to bound memory and network usage
-- Request timeouts:
+- **Request Timeouts**:
   - HTTP calls to providers and bridges use timeouts to prevent hanging
-- UI responsiveness:
+  - Provider-specific timeouts for different service tiers
+- **UI Responsiveness**:
   - Concurrent fetching of skills, MCP, and models
   - Debounced rendering and animations for smooth UX
-- Environment-driven configuration:
-  - Provider keys and model names are loaded from environment variables to avoid repeated IO
-
-[No sources needed since this section provides general guidance]
+- **Environment Configuration**:
+  - Provider keys and model names loaded from environment variables
+  - Caching of assistant options to minimize API calls
+- **Memory Management**:
+  - Knowledge hit limits to prevent memory exhaustion
+  - Efficient string processing for large documents
 
 ## Troubleshooting Guide
-- Assistant chat failures:
-  - Missing provider keys lead to 503 responses
-  - Large or malformed messages cause 400 responses
-  - Provider-specific errors bubble up with warnings
-- Knowledge search warnings:
-  - Unconfigured directories or invalid HTTP templates produce warnings
-  - Confluence misconfiguration emits hints
-- Local resource discovery:
-  - Nonexistent directories or unreadable files yield warnings
-  - Duplicate MCP project/user configs are ignored with a warning
-- UI issues:
-  - If endpoints fail, the UI shows an error and suggests checking deploy-api status
+
+### Assistant Chat Failures
+- **Missing Provider Keys**: Leads to 503 responses with clear error messages
+- **Large/Malformed Messages**: Results in 400 responses with validation errors
+- **Provider-Specific Errors**: Bubbling up with detailed warnings and suggestions
+- **Network Issues**: Timeouts and connection failures with retry logic
+
+### Knowledge Search Warnings
+- **Unconfigured Directories**: Directory existence warnings and suggestions
+- **Invalid HTTP Templates**: Template parsing errors with validation hints
+- **Confluence Misconfiguration**: Authentication and connectivity issues
+- **Rate Limiting**: Service-specific rate limiting with retry guidance
+
+### Local Resource Discovery
+- **Nonexistent Directories**: Warning messages with path suggestions
+- **Permission Issues**: File system access problems with resolution steps
+- **Duplicate MCP Configurations**: Warning about duplicate project/user configs
+- **Model Parsing Errors**: Invalid model formats with recovery suggestions
+
+### UI Issues
+- **Endpoint Failures**: Clear error messages with deployment status checks
+- **State Synchronization**: Real-time state updates with loading indicators
+- **Performance Degradation**: Memory usage monitoring and optimization suggestions
 
 **Section sources**
 - [deploy-api.ts:1132-1163](file://server/deploy-api.ts#L1132-L1163)
@@ -461,23 +642,27 @@ KM --> BR["HTTP Bridges"]
 - [SkillsLibrary.tsx:439-448](file://src/pages/SkillsLibrary.tsx#L439-L448)
 
 ## Conclusion
-The AI assistant system integrates local model discovery, skills parsing, MCP configuration, and knowledge search into a cohesive conversational interface. The backend provides robust endpoints with safety limits and clear error reporting, while the frontend offers intuitive UIs for chatting and managing local resources. By following the skill specification and environment configuration, teams can extend capabilities and automate workflows effectively.
+The AI assistant system integrates local model discovery, skills parsing, MCP configuration, and knowledge search into a comprehensive conversational interface. The system has been enhanced with detailed architectural documentation covering:
 
-[No sources needed since this section summarizes without analyzing specific files]
+- **Conversational Interface Architecture**: Sophisticated UI data flow with real-time state management
+- **Knowledge Base Integration**: Multi-source knowledge retrieval with unified interface
+- **Skill System Design Patterns**: Comprehensive skill discovery and invocation workflows
+
+The backend provides robust endpoints with safety limits and clear error reporting, while the frontend offers intuitive UIs for chatting and managing local resources. By following the skill specification and environment configuration, teams can extend capabilities and automate workflows effectively.
 
 ## Appendices
 
 ### Environment Variables and Configuration
-- Assistant options:
+- **Assistant Options**:
   - GEMINI_API_KEY, GEMINI_MODEL
   - OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL
   - OLLAMA_HOST
-- Knowledge search:
+- **Knowledge Search Configuration**:
   - ASSISTANT_KB_LOCAL_DIRS (colon/semicolon/newline separated)
   - ASSISTANT_KB_SEARCH_URLS (multiple HTTP templates)
   - ASSISTANT_WIKI_SEARCH_URL_TEMPLATE (legacy)
   - CONFLUENCE_BASE_URL, CONFLUENCE_API_TOKEN
-- Other:
+- **Other Configuration**:
   - DEPLOY_API_PORT, SERVE_SPA_ROOT
   - AUTOMATION_* flags and schedules
 
@@ -487,17 +672,20 @@ The AI assistant system integrates local model discovery, skills parsing, MCP co
 - [knowledge-search.ts:137-157](file://server/knowledge-search.ts#L137-L157)
 
 ### Example Skill Implementation
-- Place a SKILL.md in ~/.cursor/skills-cursor/<your-skill>/
-- Use frontmatter name/description and a structured body
-- The system will surface it in the SkillsLibrary with display name and description
+- **Directory Placement**: SKILL.md in ~/.cursor/skills-cursor/<your-skill>/
+- **Frontmatter Specification**: name and description fields
+- **Content Structure**: Mission, rules, and expected output structure
+- **System Integration**: Automatic discovery and UI presentation
 
 **Section sources**
 - [local-skills.ts:211-227](file://server/local-skills.ts#L211-L227)
 - [skill.md:1-89](file://skill.md#L1-L89)
 
-### Package Scripts and Dev Workflow
-- Scripts to run backend and frontend together
-- Desktop packaging and PWA assets
+### Package Scripts and Development Workflow
+- **Development Commands**: Combined backend/frontend startup
+- **Desktop Packaging**: Electron application bundling
+- **PWA Assets**: Service worker and progressive web app support
+- **Build Scripts**: Optimized production builds with caching
 
 **Section sources**
 - [package.json:9-30](file://package.json#L9-L30)

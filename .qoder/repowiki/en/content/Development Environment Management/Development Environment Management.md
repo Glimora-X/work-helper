@@ -20,17 +20,25 @@
 - [config/deploy-projects.json](file://config/deploy-projects.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated Development Workflow section to reflect current NVM-based Node.js version management
+- Enhanced Concurrent Execution section to document streamlined frontend/backend development server coordination
+- Added Developer Productivity section highlighting improvements in iterative development processes
+- Updated Troubleshooting Guide with NVM-related development environment issues
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Development Environment Management](#development-environment-management)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
 This document describes the development environment management system centered around a desktop application that orchestrates local development services, automates deployment pipelines, integrates with IDEs, manages environment variables, and synchronizes with version control and third-party tools. It explains how the Electron-based desktop app launches a bundled backend service, coordinates multi-repo startup sequences, monitors Jenkins deployments via SSE, and exposes configuration APIs for environment variables and project catalogs.
@@ -132,7 +140,7 @@ ProjCfg --> CfgJson
 - [server/deploy-contract.ts:1-169](file://server/deploy-contract.ts#L1-L169)
 
 ## Architecture Overview
-The desktop app bundles and runs the deploy API inside Electron’s UtilityProcess. The frontend communicates with the deploy API via HTTP endpoints and SSE for real-time logs. Jenkins is accessed through server-side helpers to avoid exposing credentials to the browser.
+The desktop app bundles and runs the deploy API inside Electron's UtilityProcess. The frontend communicates with the deploy API via HTTP endpoints and SSE for real-time logs. Jenkins is accessed through server-side helpers to avoid exposing credentials to the browser.
 
 ```mermaid
 sequenceDiagram
@@ -306,6 +314,59 @@ The Startup process performs:
 - [src/pages/Deployment.tsx:69-80](file://src/pages/Deployment.tsx#L69-L80)
 - [src/pages/Deployment.tsx:434-470](file://src/pages/Deployment.tsx#L434-L470)
 
+## Development Environment Management
+
+### Development Workflow and Node.js Version Management
+The development environment utilizes NVM (Node Version Manager) to ensure consistent Node.js versions across development environments. The current development scripts demonstrate:
+
+- **NVM Integration**: All development commands source NVM before execution using `. "$HOME/.nvm/nvm.sh"`
+- **Concurrent Development**: The `dev` script uses `concurrently` to run frontend and backend servers simultaneously
+- **Environment Isolation**: Development scripts unset the `PREFIX` environment variable to avoid conflicts with system Node installations
+
+**Updated** The development workflow now emphasizes streamlined concurrent execution of frontend and backend development servers, improving developer productivity during iterative development processes.
+
+**Section sources**
+- [package.json:11-16](file://package.json#L11-L16)
+- [package.json:48](file://package.json#L48)
+
+### Concurrent Execution and Iterative Development
+The development system employs sophisticated concurrent execution patterns:
+
+- **Frontend Development**: Vite server runs on port 3000 with hot module replacement
+- **Backend Development**: Express server runs on port 8787 with automatic restarts
+- **Desktop Integration**: Electron launches with both development servers ready
+- **Process Coordination**: `concurrently` ensures both servers start simultaneously with proper timing
+
+**Updated** The streamlined concurrent execution eliminates explicit Node.js version enforcement through NVM commands, allowing developers to use their preferred Node.js version while maintaining development productivity.
+
+**Section sources**
+- [package.json:11-16](file://package.json#L11-L16)
+- [electron/main.ts:17](file://electron/main.ts#L17)
+- [electron/main.ts:391-395](file://electron/main.ts#L391-L395)
+
+### Development Script Modifications
+Recent changes to the development scripts focus on:
+
+- **Removed Explicit Node.js Version Enforcement**: Development scripts no longer enforce specific Node.js versions through NVM commands
+- **Improved Developer Productivity**: Streamlined concurrent execution reduces startup time and improves the development experience
+- **Enhanced Flexibility**: Developers can use their preferred Node.js installation without NVM constraints
+
+**Section sources**
+- [package.json:11-16](file://package.json#L11-L16)
+- [scripts/build-electron.mjs:20](file://scripts/build-electron.mjs#L20)
+
+### Desktop Development Mode
+The desktop development mode provides a seamless development experience:
+
+- **Automatic Server Detection**: Uses Vite development server when `ELECTRON_IS_DEV=1`
+- **Health Checking**: Waits for both frontend and backend servers to be ready
+- **Integrated Debugging**: Opens DevTools automatically for debugging
+
+**Section sources**
+- [electron/main.ts:17](file://electron/main.ts#L17)
+- [electron/main.ts:391-395](file://electron/main.ts#L391-L395)
+- [package.json:16](file://package.json#L16)
+
 ## Dependency Analysis
 The system exhibits layered dependencies: Electron main process depends on the bundled Node API; the frontend depends on the API; the API depends on configuration, Jenkins client, and pipeline modules.
 
@@ -352,6 +413,7 @@ UI["src/pages/*"] --> API
 - Port readiness: The Electron main process checks and frees ports before launching the backend to avoid startup delays.
 - Memory pruning: The pipeline limits in-memory run snapshots and stats to bound memory growth.
 - Packaging: The build script removes large bundled fonts unless explicitly retained to speed up packaging.
+- **Concurrent Development**: Streamlined concurrent execution reduces development startup time and improves responsiveness.
 
 **Section sources**
 - [server/deploy-api.ts:204-223](file://server/deploy-api.ts#L204-L223)
@@ -360,18 +422,29 @@ UI["src/pages/*"] --> API
 - [scripts/build-electron.mjs:57-73](file://scripts/build-electron.mjs#L57-L73)
 
 ## Troubleshooting Guide
-- Backend not reachable
-  - Verify Electron is running the bundled API and that port readiness logic is executed.
-  - Check for lingering processes occupying the API port and review startup logs.
-- Jenkins configuration errors
-  - Ensure Jenkins credentials and parameter names are set; the API validates presence and formats.
-  - Confirm job path segments and branch names meet validation rules.
-- Startup failures
-  - Review filtered logs for hard failures; dependency install failures prevent dev processes from starting.
-  - Confirm IDE paths and shell wrappers are available.
-- Environment variables not applied
-  - Confirm the .env write path and that merges preserve comments and existing keys.
-  - Clear secrets selectively if needed.
+
+### Backend Not Reachable
+- Verify Electron is running the bundled API and that port readiness logic is executed.
+- Check for lingering processes occupying the API port and review startup logs.
+- **NVM Issues**: Ensure NVM is properly installed and accessible in development scripts.
+
+### Jenkins Configuration Errors
+- Ensure Jenkins credentials and parameter names are set; the API validates presence and formats.
+- Confirm job path segments and branch names meet validation rules.
+
+### Startup Failures
+- Review filtered logs for hard failures; dependency install failures prevent dev processes from starting.
+- Confirm IDE paths and shell wrappers are available.
+- **Concurrent Process Issues**: Check that both frontend and backend servers start successfully.
+
+### Environment Variables Not Applied
+- Confirm the .env write path and that merges preserve comments and existing keys.
+- Clear secrets selectively if needed.
+
+### **NVM-Related Development Issues**
+- **NVM Command Not Found**: Ensure NVM is installed and the path `$HOME/.nvm/nvm.sh` is accessible
+- **Node Version Mismatch**: Verify that the Node.js version used by development scripts matches your project requirements
+- **Concurrent Execution Problems**: Check that `concurrently` is properly installed and functioning
 
 **Section sources**
 - [electron/main.ts:180-257](file://electron/main.ts#L180-L257)
@@ -380,7 +453,7 @@ UI["src/pages/*"] --> API
 - [server/assistant-workspace-config.ts:153-187](file://server/assistant-workspace-config.ts#L153-L187)
 
 ## Conclusion
-This system provides a cohesive development environment management solution: a desktop app that packages a Node backend, orchestrates multi-repo startups, integrates with Jenkins via secure server-side calls, and offers robust configuration management for environment variables and project catalogs. Its modular design supports team collaboration, reproducible setups, and scalable deployment workflows.
+This system provides a cohesive development environment management solution: a desktop app that packages a Node backend, orchestrates multi-repo startups, integrates with Jenkins via secure server-side calls, and offers robust configuration management for environment variables and project catalogs. Its modular design supports team collaboration, reproducible setups, and scalable deployment workflows. The recent development script modifications streamline concurrent execution and improve developer productivity while maintaining flexibility in Node.js version management.
 
 ## Appendices
 
@@ -391,8 +464,11 @@ This system provides a cohesive development environment management solution: a d
   - Enter a natural language command or select a template; review the DAG; start the pipeline and monitor progress.
 - Configure credentials
   - Use the Settings page to add or clear secrets; the system merges changes into .env safely.
+- **Streamlined Development**
+  - Use `npm run dev` for concurrent frontend/backend development with automatic server coordination.
 
 **Section sources**
 - [src/pages/Startup.tsx:206-269](file://src/pages/Startup.tsx#L206-L269)
 - [src/pages/Deployment.tsx:351-432](file://src/pages/Deployment.tsx#L351-L432)
 - [src/pages/Settings.tsx:147-174](file://src/pages/Settings.tsx#L147-L174)
+- [package.json:11](file://package.json#L11)
