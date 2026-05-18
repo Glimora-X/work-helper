@@ -1959,3 +1959,65 @@ html.electron-float-mode #root > .float-dock-root {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── React Flow DAG Customization ───────────────────────────── */
+.pkmer-dag-node {
+  transition: all 0.2s ease;
+  cursor: grab;
+}
+
+.pkmer-dag-node:active {
+  cursor: grabbing;
+}
+
+.pkmer-dag-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__edge-path {
+  stroke: var(--color-hairline);
+  stroke-width: 2;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from { stroke-dashoffset: 10; }
+}
+
+/* Copilot Input Styling */
+.pkmer-copilot-input {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pkmer-copilot-input:focus-within {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-500) 15%, transparent);
+}
+
+/* React Flow Controls Customization */
+.react-flow__controls {
+  box-shadow: var(--shadow-card);
+}
+
+.react-flow__controls button {
+  background: var(--color-shell-bg);
+  border-color: var(--color-hairline);
+  color: var(--color-ink);
+}
+
+.react-flow__controls button:hover {
+  background: var(--color-surface-hover);
+}
+
+/* React Flow MiniMap Customization */
+.react-flow__minimap {
+  background: var(--color-shell-bg);
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+}

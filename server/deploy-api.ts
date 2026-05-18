@@ -1163,6 +1163,18 @@ app.post('/api/assistant/chat', async (req, res) => {
 });
 
 /** Jira 个人待办 / 周报（凭据与 MCP `chanjet-jira-mcp-new` 推荐的 JIRA_SERVER_URL 等一致，写在 .env 勿入库） */
+
+/** 后端认证失败限流：防止前端缓存失效时仍频繁调用 Jira */
+const jiraAuthFailureState: {
+  lastAuthErrorTime: number;
+  cooldownMs: number;
+  errorHint: string;
+} = {
+  lastAuthErrorTime: 0,
+  cooldownMs: 5 * 60 * 1000, // 5分钟
+  errorHint: '',
+};
+
 app.get('/api/jira/status', (_req, res) => {
   const cfg = resolveJiraAuth(process.env);
   if (cfg.ok === false) {
@@ -1180,6 +1192,28 @@ app.get('/api/jira/status', (_req, res) => {
 
 app.get('/api/jira/my-open', async (req, res) => {
   try {
+    // 优先检查：凭据未配置时直接拒绝，不调用 Jira
+    const cfg = resolveJiraAuth(process.env);
+    if (cfg.ok === false) {
+      res.status(503).json({ 
+        error: `Jira 凭据未配置或配置不全。${cfg.reason}\n\n请在 .env 中配置：JIRA_SERVER_URL、JIRA_USERNAME、JIRA_PASSWORD（或 JIRA_API_TOKEN）`, 
+        issues: [], 
+        total: 0 
+      });
+      return;
+    }
+
+    // 检查后端认证失败限流
+    const now = Date.now();
+    if (now - jiraAuthFailureState.lastAuthErrorTime < jiraAuthFailureState.cooldownMs) {
+      res.status(503).json({ 
+        error: `Jira 认证失败，服务已暂停调用。错误信息：${jiraAuthFailureState.errorHint}\n\n请修正 .env 中的 Jira 凭据配置后重试。`, 
+        issues: [], 
+        total: 0 
+      });
+      return;
+    }
+
     const maxResults = Math.min(Math.max(Number(req.query.max) || 50, 1), 100);
     const r = await jiraSearch({
       jql: jqlMyOpenIssues(),
@@ -1187,6 +1221,9 @@ app.get('/api/jira/my-open', async (req, res) => {
       logContext: `GET /api/jira/my-open?max=${encodeURIComponent(String(req.query.max ?? maxResults))}`,
     });
     if (r.authError) {
+      // 记录认证失败，触发限流
+      jiraAuthFailureState.lastAuthErrorTime = Date.now();
+      jiraAuthFailureState.errorHint = r.authError;
       res.status(503).json({ error: r.authError, issues: [], total: 0 });
       return;
     }
@@ -1194,6 +1231,9 @@ app.get('/api/jira/my-open', async (req, res) => {
       res.status(502).json({ error: r.error, issues: [], total: 0 });
       return;
     }
+    // 成功调用，清除限流状态
+    jiraAuthFailureState.lastAuthErrorTime = 0;
+    jiraAuthFailureState.errorHint = '';
     res.json({ issues: r.issues, total: r.total });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -1204,6 +1244,16 @@ app.get('/api/jira/my-open', async (req, res) => {
 /** 对工单执行「提测」工作流过渡（过渡名默认匹配「提测」等，见 jira-rest jiraSubmitTestTransition） */
 app.post('/api/jira/issue/:issueKey/submit-test', async (req, res) => {
   try {
+    // 优先检查：凭据未配置时直接拒绝，不调用 Jira
+    const cfg = resolveJiraAuth(process.env);
+    if (cfg.ok === false) {
+      res.status(503).json({ 
+        error: `Jira 凭据未配置或配置不全。${cfg.reason}\n\n请在 .env 中配置：JIRA_SERVER_URL、JIRA_USERNAME、JIRA_PASSWORD（或 JIRA_API_TOKEN）`, 
+        ok: false 
+      });
+      return;
+    }
+
     const issueKey = req.params.issueKey?.trim() ?? '';
     const r = await jiraSubmitTestTransition({
       issueKey,
@@ -1235,6 +1285,34 @@ app.post('/api/jira/issue/:issueKey/submit-test', async (req, res) => {
 
 app.get('/api/jira/weekly', async (req, res) => {
   try {
+    // 优先检查：凭据未配置时直接拒绝，不调用 Jira
+    const cfg = resolveJiraAuth(process.env);
+    if (cfg.ok === false) {
+      res.status(503).json({ 
+        error: `Jira 凭据未配置或配置不全。${cfg.reason}\n\n请在 .env 中配置：JIRA_SERVER_URL、JIRA_USERNAME、JIRA_PASSWORD（或 JIRA_API_TOKEN）`, 
+        weekOffset: 0,
+        range: { from: '', toExclusive: '', labelZh: '' },
+        issues: [], 
+        total: 0,
+        markdown: ''
+      });
+      return;
+    }
+
+    // 检查后端认证失败限流
+    const now = Date.now();
+    if (now - jiraAuthFailureState.lastAuthErrorTime < jiraAuthFailureState.cooldownMs) {
+      res.status(503).json({ 
+        error: `Jira 认证失败，服务已暂停调用。错误信息：${jiraAuthFailureState.errorHint}\n\n请修正 .env 中的 Jira 凭据配置后重试。`, 
+        weekOffset: 0,
+        range: { from: '', toExclusive: '', labelZh: '' },
+        issues: [], 
+        total: 0,
+        markdown: ''
+      });
+      return;
+    }
+
     const weekOffset = Number.isFinite(Number(req.query.weekOffset))
       ? Number(req.query.weekOffset)
       : 0;
@@ -1246,6 +1324,9 @@ app.get('/api/jira/weekly', async (req, res) => {
       logContext: `GET /api/jira/weekly?weekOffset=${weekOffset}`,
     });
     if (r.authError) {
+      // 记录认证失败，触发限流
+      jiraAuthFailureState.lastAuthErrorTime = Date.now();
+      jiraAuthFailureState.errorHint = r.authError;
       res.status(503).json({
         error: r.authError,
         weekOffset,
@@ -1267,6 +1348,9 @@ app.get('/api/jira/weekly', async (req, res) => {
       });
       return;
     }
+    // 成功调用，清除限流状态
+    jiraAuthFailureState.lastAuthErrorTime = 0;
+    jiraAuthFailureState.errorHint = '';
     const markdown = buildWeeklySummaryMarkdown(r.issues, labelZh);
     res.json({
       weekOffset,

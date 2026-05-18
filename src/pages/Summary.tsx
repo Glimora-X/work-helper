@@ -16,6 +16,12 @@ type JiraStatusPayload = {
   hint?: string;
 };
 
+/** 认证失败缓存：防止频繁调用导致 Jira 封号 */
+type AuthFailureCache = {
+  timestamp: number;
+  errorHint: string;
+};
+
 type JiraIssueRow = {
   key: string;
   fields?: {
@@ -61,6 +67,10 @@ export default function Summary() {
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [weeklyError, setWeeklyError] = useState<string | null>(null);
   const [copyDone, setCopyDone] = useState(false);
+
+  // 认证失败缓存：5分钟内不再重复调用
+  const [authFailureCache, setAuthFailureCache] = useState<AuthFailureCache | null>(null);
+  const AUTH_FAILURE_COOLDOWN = 5 * 60 * 1000; // 5分钟
 
   const [issueMenu, setIssueMenu] = useState<{
     x: number;
@@ -160,6 +170,11 @@ export default function Summary() {
         return;
       }
       setStatus(j);
+      
+      // 如果配置正常，清除认证失败缓存
+      if (j.configured) {
+        setAuthFailureCache(null);
+      }
     } catch (e) {
       setStatus({
         configured: false,
@@ -172,6 +187,20 @@ export default function Summary() {
   }, []);
 
   const loadOpen = useCallback(async () => {
+    // 检查是否在认证失败冷却期
+    if (authFailureCache) {
+      const now = Date.now();
+      if (now - authFailureCache.timestamp < AUTH_FAILURE_COOLDOWN) {
+        setOpenError(`Jira 认证失败，已暂停调用。错误信息：${authFailureCache.errorHint}\n\n请修正 .env 中的 Jira 凭据配置后，点击「全部刷新」重试。`);
+        setOpenIssues([]);
+        setOpenTotal(0);
+        return;
+      } else {
+        // 冷却期已过，清除缓存
+        setAuthFailureCache(null);
+      }
+    }
+
     setOpenLoading(true);
     setOpenError(null);
     try {
@@ -190,6 +219,13 @@ export default function Summary() {
         return;
       }
       if (!r.ok) {
+        // 如果是认证错误，设置冷却缓存
+        if (r.status === 503 || (j.error && (j.error.includes('认证') || j.error.includes('auth') || j.error.includes('401')))) {
+          setAuthFailureCache({
+            timestamp: Date.now(),
+            errorHint: j.error || 'Jira 认证失败',
+          });
+        }
         setOpenError(j.error || `HTTP ${r.status}`);
         setOpenIssues([]);
         setOpenTotal(0);
@@ -204,9 +240,24 @@ export default function Summary() {
     } finally {
       setOpenLoading(false);
     }
-  }, []);
+  }, [authFailureCache]);
 
   const loadWeekly = useCallback(async (offset: number) => {
+    // 检查是否在认证失败冷却期
+    if (authFailureCache) {
+      const now = Date.now();
+      if (now - authFailureCache.timestamp < AUTH_FAILURE_COOLDOWN) {
+        setWeeklyError(`Jira 认证失败，已暂停调用。错误信息：${authFailureCache.errorHint}\n\n请修正 .env 中的 Jira 凭据配置后，点击「全部刷新」重试。`);
+        setWeeklyMd('');
+        setWeeklyLabel('');
+        setWeeklyTotal(0);
+        return;
+      } else {
+        // 冷却期已过，清除缓存
+        setAuthFailureCache(null);
+      }
+    }
+
     setWeeklyLoading(true);
     setWeeklyError(null);
     try {
@@ -231,6 +282,13 @@ export default function Summary() {
         return;
       }
       if (!r.ok) {
+        // 如果是认证错误，设置冷却缓存
+        if (r.status === 503 || (j.error && (j.error.includes('认证') || j.error.includes('auth') || j.error.includes('401')))) {
+          setAuthFailureCache({
+            timestamp: Date.now(),
+            errorHint: j.error || 'Jira 认证失败',
+          });
+        }
         setWeeklyError(j.error || `HTTP ${r.status}`);
         setWeeklyMd('');
         setWeeklyLabel('');
@@ -248,7 +306,7 @@ export default function Summary() {
     } finally {
       setWeeklyLoading(false);
     }
-  }, []);
+  }, [authFailureCache]);
 
   useEffect(() => {
     void loadStatus();
@@ -256,13 +314,27 @@ export default function Summary() {
 
   useEffect(() => {
     if (!status?.configured) return;
+    // 如果有认证失败缓存，不再调用
+    if (authFailureCache) {
+      const now = Date.now();
+      if (now - authFailureCache.timestamp < AUTH_FAILURE_COOLDOWN) {
+        return;
+      }
+    }
     void loadOpen();
-  }, [status?.configured, loadOpen]);
+  }, [status?.configured, loadOpen, authFailureCache]);
 
   useEffect(() => {
     if (!status?.configured) return;
+    // 如果有认证失败缓存，不再调用
+    if (authFailureCache) {
+      const now = Date.now();
+      if (now - authFailureCache.timestamp < AUTH_FAILURE_COOLDOWN) {
+        return;
+      }
+    }
     void loadWeekly(weekOffset);
-  }, [status?.configured, weekOffset, loadWeekly]);
+  }, [status?.configured, weekOffset, loadWeekly, authFailureCache]);
 
   const addToTodayFromMenu = useCallback(() => {
     if (!issueMenu) return;
@@ -400,6 +472,8 @@ export default function Summary() {
             <button
               type="button"
               onClick={() => {
+                // 手动刷新时清除认证失败缓存
+                setAuthFailureCache(null);
                 void loadStatus();
                 void loadOpen();
                 void loadWeekly(weekOffset);

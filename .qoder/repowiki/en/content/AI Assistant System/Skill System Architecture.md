@@ -10,7 +10,6 @@
 - [local-mcp.ts](file://server/local-mcp.ts)
 - [local-models.ts](file://server/local-models.ts)
 - [README.md](file://README.md)
-- [metadata.json](file://metadata.json)
 </cite>
 
 ## Update Summary

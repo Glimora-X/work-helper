@@ -24,6 +24,11 @@
 - [index.css](file://src/index.css)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced Settings.tsx with keyboard shortcuts (Cmd/Ctrl + S), group-based configuration organization, validation system, and connection testing for Jenkins/Jira/Confluence services
+- Updated Startup.tsx with improved terminal management, multi-tab support, and responsive design elements
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -88,9 +93,9 @@ FD --> FC
 - [Tasks.tsx:1-542](file://src/pages/Tasks.tsx#L1-L542)
 - [Deployment.tsx:1-1068](file://src/pages/Deployment.tsx#L1-L1068)
 - [ArtisticAssistant.tsx:1-349](file://src/pages/ArtisticAssistant.tsx#L1-L349)
-- [Settings.tsx:1-348](file://src/pages/Settings.tsx#L1-L348)
+- [Settings.tsx:1-552](file://src/pages/Settings.tsx#L1-L552)
 - [SkillsLibrary.tsx:1-599](file://src/pages/SkillsLibrary.tsx#L1-L599)
-- [Startup.tsx:1-661](file://src/pages/Startup.tsx#L1-L661)
+- [Startup.tsx:1-818](file://src/pages/Startup.tsx#L1-L818)
 - [Automations.tsx:1-661](file://src/pages/Automations.tsx#L1-L661)
 - [Summary.tsx:1-653](file://src/pages/Summary.tsx#L1-L653)
 - [Cleanup.tsx:1-26](file://src/pages/Cleanup.tsx#L1-L26)
@@ -109,9 +114,9 @@ FD --> FC
 - [Tasks.tsx:1-542](file://src/pages/Tasks.tsx#L1-L542)
 - [Deployment.tsx:1-1068](file://src/pages/Deployment.tsx#L1-L1068)
 - [ArtisticAssistant.tsx:1-349](file://src/pages/ArtisticAssistant.tsx#L1-L349)
-- [Settings.tsx:1-348](file://src/pages/Settings.tsx#L1-L348)
+- [Settings.tsx:1-552](file://src/pages/Settings.tsx#L1-L552)
 - [SkillsLibrary.tsx:1-599](file://src/pages/SkillsLibrary.tsx#L1-L599)
-- [Startup.tsx:1-661](file://src/pages/Startup.tsx#L1-L661)
+- [Startup.tsx:1-818](file://src/pages/Startup.tsx#L1-L818)
 - [Automations.tsx:1-661](file://src/pages/Automations.tsx#L1-L661)
 - [Summary.tsx:1-653](file://src/pages/Summary.tsx#L1-L653)
 - [Cleanup.tsx:1-26](file://src/pages/Cleanup.tsx#L1-L26)
@@ -272,29 +277,36 @@ Reply --> Render["Render messages and hits"]
 - [ArtisticAssistant.tsx:1-349](file://src/pages/ArtisticAssistant.tsx#L1-L349)
 
 ### Settings
-- Purpose: Maintain project catalog and environment credentials (.env) for Jenkins/Jira/Wiki.
+- Purpose: Maintain project catalog and environment credentials (.env) for Jenkins/Jira/Wiki with enhanced keyboard shortcuts and validation.
 - Data Fetching: Loads project catalog and environment UI metadata; saves updates via PUT/POST.
-- State Management: Tracks catalog entries, plain/secret values, clear flags, saving/loading states, and hints/errors.
-- Interaction: Add/remove/update catalog rows; save catalog; configure secrets and clear existing ones; save env.
-- Backend Integration: Reads/writes to assistant endpoints for project catalog and environment UI.
+- State Management: Tracks catalog entries, plain/secret values, clear flags, saving/loading states, validation errors, connection test results, and expanded groups.
+- Interaction: Add/remove/update catalog rows; save catalog; configure secrets and clear existing ones; save env with validation; keyboard shortcuts (Cmd/Ctrl + S); group-based configuration organization; connection testing for Jenkins/Jira/Confluence.
+- Backend Integration: Reads/writes to assistant endpoints for project catalog and environment UI; connection testing endpoints for service verification.
 - Real-time Updates: None for this page.
-- Accessibility: Clear labels, disabled states during saving, and error messaging.
+- Accessibility: Clear labels, disabled states during saving, validation error messaging, and group expansion controls.
+
+**Updated** Enhanced with keyboard shortcuts (Cmd/Ctrl + S), group-based configuration organization, validation system, and connection testing for Jenkins/Jira/Confluence services.
 
 ```mermaid
 flowchart TD
 Init(["Mount"]) --> LoadCat["Load project catalog"]
 LoadCat --> LoadEnv["Load env UI metadata"]
-LoadEnv --> Edit["Edit fields"]
-Edit --> Save["Save catalog/env"]
-Save --> Reload["Reload after save"]
+LoadEnv --> SetupShortcuts["Setup keyboard shortcuts"]
+SetupShortcuts --> Edit["Edit fields"]
+Edit --> Validate["Validate inputs"]
+Validate --> Save["Save catalog/env"]
+Save --> TestConn["Test service connections"]
+TestConn --> Reload["Reload after save"]
 ```
 
 **Diagram sources**
-- [Settings.tsx:61-115](file://src/pages/Settings.tsx#L61-L115)
-- [Settings.tsx:129-174](file://src/pages/Settings.tsx#L129-L174)
+- [Settings.tsx:119-130](file://src/pages/Settings.tsx#L119-L130)
+- [Settings.tsx:132-144](file://src/pages/Settings.tsx#L132-L144)
+- [Settings.tsx:146-168](file://src/pages/Settings.tsx#L146-L168)
+- [Settings.tsx:208-252](file://src/pages/Settings.tsx#L208-L252)
 
 **Section sources**
-- [Settings.tsx:1-348](file://src/pages/Settings.tsx#L1-L348)
+- [Settings.tsx:1-552](file://src/pages/Settings.tsx#L1-L552)
 
 ### SkillsLibrary
 - Purpose: Discover and manage local skills, MCP servers, and local models.
@@ -320,13 +332,15 @@ Render --> Refresh["Refresh scan"]
 - [SkillsLibrary.tsx:1-599](file://src/pages/SkillsLibrary.tsx#L1-L599)
 
 ### Startup
-- Purpose: Define and execute development environment startup profiles with IDE integration and real-time logs.
+- Purpose: Define and execute development environment startup profiles with IDE integration and real-time logs with enhanced terminal management.
 - Data Fetching: Loads project catalog; launches runs and subscribes to SSE events for logs.
-- State Management: Profiles, active profile, run state, logs, and terminal UI state.
-- Interaction: Create/edit profiles; launch/run; stop current run; preview plan; edit mode.
-- Backend Integration: Uses /api/startup endpoints; SSE /runs/{runId}/events; EventSource lifecycle management.
+- State Management: Profiles, active profile, run state, logs, terminal UI state, multi-tab management, batch selection, and search filtering.
+- Interaction: Create/edit profiles; launch/run; stop current run; preview plan; edit mode; multi-tab terminal switching; batch selection; search filtering; fullscreen terminal mode.
+- Backend Integration: Uses /api/startup endpoints; SSE /runs/{runId}/events; EventSource lifecycle management; project catalog integration.
 - Real-time Updates: Live logs via SSE; auto-scroll; status transitions (bootstrapping/running/completed/failed/stopped).
-- Accessibility: Disabled states during runs, clear labels, and terminal-like presentation.
+- Accessibility: Disabled states during runs, clear labels, terminal-like presentation, batch selection controls, and search interface.
+
+**Updated** Enhanced with improved terminal management, multi-tab support, and responsive design elements.
 
 ```mermaid
 sequenceDiagram
@@ -340,13 +354,14 @@ API-->>S : "{runId}"
 S->>ES : "Attach /runs/{runId}/events"
 ES-->>S : "log/bootstrap_ready/completed/stopped/failed"
 S->>S : "Update logs and status"
+S->>S : "Manage terminal tabs and batch selection"
 ```
 
 **Diagram sources**
-- [Startup.tsx:214-269](file://src/pages/Startup.tsx#L214-L269)
+- [Startup.tsx:250-313](file://src/pages/Startup.tsx#L250-L313)
 
 **Section sources**
-- [Startup.tsx:1-661](file://src/pages/Startup.tsx#L1-L661)
+- [Startup.tsx:1-818](file://src/pages/Startup.tsx#L1-L818)
 
 ### Automations
 - Purpose: Configure and run scheduled automation tasks with workflow editor and live terminal.
@@ -489,9 +504,9 @@ FC["float-command/*"] --> FD
 - [Tasks.tsx:1-542](file://src/pages/Tasks.tsx#L1-L542)
 - [Deployment.tsx:1-1068](file://src/pages/Deployment.tsx#L1-L1068)
 - [ArtisticAssistant.tsx:1-349](file://src/pages/ArtisticAssistant.tsx#L1-L349)
-- [Settings.tsx:1-348](file://src/pages/Settings.tsx#L1-L348)
+- [Settings.tsx:1-552](file://src/pages/Settings.tsx#L1-L552)
 - [SkillsLibrary.tsx:1-599](file://src/pages/SkillsLibrary.tsx#L1-L599)
-- [Startup.tsx:1-661](file://src/pages/Startup.tsx#L1-L661)
+- [Startup.tsx:1-818](file://src/pages/Startup.tsx#L1-L818)
 - [Automations.tsx:1-661](file://src/pages/Automations.tsx#L1-L661)
 - [Summary.tsx:1-653](file://src/pages/Summary.tsx#L1-L653)
 - [Cleanup.tsx:1-26](file://src/pages/Cleanup.tsx#L1-L26)
@@ -514,8 +529,6 @@ FC["float-command/*"] --> FD
 - Styling
   - Use CSS custom properties for theming and reduce heavy repaints; leverage CSS grid/flex for layouts.
 
-[No sources needed since this section provides general guidance]
-
 ## Troubleshooting Guide
 - Deployment
   - Health checks failing: Verify VITE_DEPLOY_API_BASE and backend availability; check SSE connection.
@@ -523,10 +536,16 @@ FC["float-command/*"] --> FD
 - Startup
   - No logs: Confirm SSE endpoint and that runId is present; check for connection errors.
   - Running state not updating: Ensure bootstrap_ready/completed events are received.
+  - Terminal tabs not working: Verify activeTerminalTab state and serviceLogs structure.
+  - Batch selection issues: Check selectedProfileIds Set operations and isBatchMode state.
 - Automations
   - Waiting for input: Provide manual solution via continue endpoint; verify runId.
 - Summary
   - Jira not configured: Check environment variables and server URL; review hint messages for connectivity issues.
+- Settings
+  - Keyboard shortcuts not working: Verify event listener setup and metaKey/ctrlKey detection.
+  - Connection testing failing: Check test-connection endpoints and network connectivity.
+  - Validation errors: Review validation logic for Jenkins/Jira required fields.
 - FloatDock
   - Dragging not working: Ensure floatDragDelta IPC is available; verify Electron preload integration.
   - Panel not resizing: Confirm setFloatWindowSize IPC is present; build desktop app for production behavior.
@@ -535,9 +554,13 @@ FC["float-command/*"] --> FD
 - [Deployment.tsx:316-338](file://src/pages/Deployment.tsx#L316-L338)
 - [Deployment.tsx:155-202](file://src/pages/Deployment.tsx#L155-L202)
 - [Startup.tsx:232-264](file://src/pages/Startup.tsx#L232-L264)
+- [Startup.tsx:144-148](file://src/pages/Startup.tsx#L144-L148)
+- [Startup.tsx:240-248](file://src/pages/Startup.tsx#L240-L248)
 - [Automations.tsx:195-229](file://src/pages/Automations.tsx#L195-L229)
 - [Summary.tsx:135-172](file://src/pages/Summary.tsx#L135-L172)
+- [Settings.tsx:119-130](file://src/pages/Settings.tsx#L119-L130)
+- [Settings.tsx:146-168](file://src/pages/Settings.tsx#L146-L168)
 - [FloatDock.tsx:314-378](file://src/pages/FloatDock.tsx#L314-L378)
 
 ## Conclusion
-The page components are cohesive, following consistent patterns for state, data fetching, and UI. They integrate with backend APIs, leverage SSE for real-time updates where applicable, and maintain accessibility and performance through thoughtful design choices. The shared utilities centralize cross-page concerns, enabling reuse and maintainability.
+The page components are cohesive, following consistent patterns for state, data fetching, and UI. They integrate with backend APIs, leverage SSE for real-time updates where applicable, and maintain accessibility and performance through thoughtful design choices. The shared utilities centralize cross-page concerns, enabling reuse and maintainability. Recent enhancements to Settings and Startup demonstrate continued evolution toward better user experience with keyboard shortcuts, validation, connection testing, multi-tab terminals, and responsive design.
