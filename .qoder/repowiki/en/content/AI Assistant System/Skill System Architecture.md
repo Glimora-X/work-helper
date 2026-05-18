@@ -15,12 +15,14 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced documentation with detailed coverage of skill system design patterns
-- Comprehensive skill discovery mechanisms and registration processes
-- Detailed invocation workflows and component responsibilities
-- Expanded interaction diagrams and endpoint definitions
-- Added comprehensive API definitions and integration patterns
-- Enhanced security considerations and performance implications
+- Enhanced documentation with comprehensive coverage of skill system design patterns and multi-agent ecosystem support
+- Updated skill specification format with new guidance structure and quality gates
+- Expanded discovery mechanisms to include MCP servers and local models alongside skills
+- Enhanced UI capabilities with advanced filtering, concurrent loading, and responsive design
+- Added comprehensive API definitions and integration patterns for assistant system
+- Enhanced security considerations with path containment validation and resource protection
+- Updated troubleshooting guidance with common issues and solutions
+- Improved performance optimizations with concurrent processing and virtualized rendering
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -42,7 +44,7 @@
 ## Introduction
 This document explains the comprehensive skill system architecture used to develop, discover, register, and invoke custom AI capabilities within the assistant system. The skill system provides a standardized, portable format (SKILL.md) that enables teams to share reusable capabilities across different AI agents while maintaining consistent presentation and invocation patterns.
 
-The system follows a three-stage flow: Discovery, Presentation, and Integration. It supports multiple agent ecosystems (Claude, Cursor, Agents, Codex) and provides robust safety mechanisms, performance optimizations, and developer-friendly tooling.
+The system follows a three-stage flow: Discovery, Presentation, and Integration. It supports multiple agent ecosystems (Claude, Cursor, Agents, Codex) and provides robust safety mechanisms, performance optimizations, and developer-friendly tooling. The system has evolved to include comprehensive support for MCP servers, local models, and enhanced UI capabilities for managing diverse AI resources.
 
 ## Project Structure
 The skill system spans backend scanning logic, frontend UI, and assistant integration components:
@@ -95,18 +97,19 @@ The skill system uses a standardized markdown format with YAML frontmatter for d
 - `license`: Optional licensing information
 - `metadata.author`: Author attribution
 
-**Guidance Structure:**
-- Mission: Primary purpose and scope
-- Brand: Branding guidelines and identity
-- Style Foundations: Typography, color palettes, spacing systems
-- Accessibility: WCAG compliance and inclusive design principles
-- Writing Tone: Communication style and voice guidelines
-- Rules: Do/Dont guidelines with specific constraints
-- Expected Behavior: Behavioral expectations and decision-making patterns
-- Guideline Authoring Workflow: Structured approach to skill creation
-- Required Output Structure: Standardized response formatting
-- Component Rule Expectations: Component-level design constraints
-- Quality Gates: Review criteria and validation standards
+**Enhanced Guidance Structure:**
+- **Mission**: Primary purpose and scope
+- **Brand**: Branding guidelines and identity
+- **Style Foundations**: Typography, color palettes, spacing systems
+- **Accessibility**: WCAG 2.2 AA compliance and inclusive design principles
+- **Writing Tone**: Communication style and voice guidelines
+- **Rules**: Do/Dont guidelines with specific constraints
+- **Expected Behavior**: Behavioral expectations and decision-making patterns
+- **Guideline Authoring Workflow**: Structured approach to skill creation
+- **Required Output Structure**: Standardized response formatting
+- **Component Rule Expectations**: Component-level design constraints
+- **Quality Gates**: Review criteria and validation standards
+- **Example Constraint Language**: Best practices for rule formulation
 
 **Section sources**
 - [skill.md:1-89](file://skill.md#L1-L89)
@@ -121,11 +124,12 @@ The discovery engine scans multiple agent ecosystems for SKILL.md files:
 - Agents: `~/.agents/skills/`
 - Codex: `~/.codex/skills/`
 
-**Safety Mechanisms:**
+**Enhanced Safety Mechanisms:**
 - Path containment validation to prevent directory traversal
-- Skip list for common directories (node_modules, .git, dist, etc.)
+- Skip list for common directories (node_modules, .git, dist, build, .next, coverage, __pycache__)
 - Maximum depth limit (14 levels) to prevent excessive scanning
 - Symbolic link detection and skipping
+- Permission error handling and graceful degradation
 
 **Section sources**
 - [local-skills.ts:15-29](file://server/local-skills.ts#L15-L29)
@@ -134,13 +138,16 @@ The discovery engine scans multiple agent ecosystems for SKILL.md files:
 ### Skills Library UI
 The frontend provides a comprehensive interface for browsing and managing skills:
 
-**Features:**
+**Enhanced Features:**
 - Concurrent loading of skills, MCP servers, and models
 - Advanced filtering by agent source (Claude, Cursor, Agents, Codex)
-- Search functionality across all skill attributes
+- Real-time search across all skill attributes
 - Collapsible descriptions with expand/collapse functionality
 - Copy-to-clipboard for skill paths
 - Responsive card-based layout with animations
+- Tabbed interface for skills, MCP servers, and models
+- Badge-based source identification with color coding
+- Error handling and loading states
 
 **Section sources**
 - [SkillsLibrary.tsx:202-250](file://src/pages/SkillsLibrary.tsx#L202-L250)
@@ -183,21 +190,23 @@ SkillsLibrary-->>User : Render interactive cards
 ### Skill Specification Format (SKILL.md)
 The skill specification format ensures consistency and portability across different AI agents:
 
-**Frontmatter Processing:**
+**Enhanced Frontmatter Processing:**
 - YAML parsing with support for quoted and unquoted values
 - Stripping of surrounding quotes and whitespace
 - Extraction of name and description fields
 
-**Content Processing:**
+**Intelligent Content Processing:**
 - Markdown body extraction after frontmatter
 - Intelligent description extraction from first paragraph
-- Noise filtering (tables, code blocks, headers)
-- Text sanitization and length limiting
+- Noise filtering (tables, code blocks, headers, horizontal rules)
+- Text sanitization and length limiting (560 character display limit)
+- Preserved formatting for code examples and lists
 
-**Quality Assurance:**
+**Comprehensive Quality Assurance:**
 - Fallback description generation when missing
-- Maximum length enforcement (560 characters for display)
+- Maximum length enforcement with intelligent truncation
 - Consistent formatting and structure
+- Managed content sections with TYPEUI_SH markers
 
 **Section sources**
 - [local-skills.ts:40-57](file://server/local-skills.ts#L40-L57)
@@ -242,7 +251,7 @@ Sort --> Return(["Return {skills, rootsTried, warnings}"])
 ### Skills Library UI and Runtime Integration
 The UI provides comprehensive management and integration capabilities:
 
-**Concurrent Loading Strategy:**
+**Enhanced Concurrent Loading Strategy:**
 - Skills: `/api/local-skills`
 - MCP Servers: `/api/local-mcp`
 - Local Models: `/api/local-models`
@@ -252,12 +261,14 @@ The UI provides comprehensive management and integration capabilities:
 - Real-time search across all skill attributes
 - Pagination-like virtual scrolling for large datasets
 - Responsive design with mobile optimization
+- Tabbed interface for different resource types
 
 **Interactive Features:**
-- Expandable/collapsible skill descriptions
+- Expandable/collapsible skill descriptions with intelligent truncation
 - One-click path copying with visual feedback
-- Badge-based source identification
+- Badge-based source identification with color coding
 - Animated card layouts with staggered entrance effects
+- Error handling and loading state management
 
 **Section sources**
 - [SkillsLibrary.tsx:216-250](file://src/pages/SkillsLibrary.tsx#L216-L250)
@@ -271,17 +282,20 @@ The UI provides comprehensive management and integration capabilities:
 - Use descriptive folder names that match the skill's purpose
 - Include comprehensive frontmatter with name and description
 
-**Content Structure:**
+**Enhanced Content Structure:**
 - Clear mission statement defining the skill's scope
 - Well-defined style foundations and design principles
 - Specific accessibility requirements and testing criteria
 - Structured workflow for consistent authoring
+- Quality gates and review criteria
+- Example constraint language for rule formulation
 
 **Testing and Validation:**
 - Verify SKILL.md readability and frontmatter correctness
 - Test discovery via `/api/local-skills` endpoint
 - Validate UI rendering and filtering behavior
 - Ensure cross-agent compatibility
+- Test with various markdown formatting scenarios
 
 ### Parameter Handling and Response Formatting
 Skills serve as static guidance documents with the assistant system handling dynamic parameter processing. The system maintains separation of concerns by keeping skills declarative while allowing the assistant to adapt responses based on context and user input.
@@ -292,7 +306,7 @@ Skills serve as static guidance documents with the assistant system handling dyn
 
 ## Security and Performance Considerations
 
-### Safety Mechanisms
+### Enhanced Safety Mechanisms
 **Path Containment:**
 - Absolute path resolution prevents directory traversal attacks
 - Root directory validation ensures safe scanning boundaries
@@ -300,19 +314,22 @@ Skills serve as static guidance documents with the assistant system handling dyn
 
 **Resource Protection:**
 - Maximum recursion depth limits (14 levels) prevent excessive scanning
-- Skip list for common directories (node_modules, .git, dist, etc.)
+- Skip list for common directories (node_modules, .git, dist, build, .next, coverage, __pycache__)
 - Timeout protection for file operations
+- Graceful error handling for permission issues
 
 ### Performance Optimizations
 **Efficient Scanning:**
 - Concurrent processing of multiple agent roots
 - Early termination on permission errors
 - Minimal memory footprint with streaming file processing
+- Intelligent caching and deduplication
 
 **UI Responsiveness:**
 - Concurrent API calls reduce perceived latency
 - Virtualized rendering for large datasets
 - Debounced search filtering to minimize re-renders
+- Smooth animations and transitions
 
 **Section sources**
 - [local-skills.ts:124-197](file://server/local-skills.ts#L124-L197)
@@ -354,7 +371,7 @@ Implementation: [assistant-chat.ts:160-202](file://server/assistant-chat.ts#L160
 
 ## Integration Patterns
 
-### Assistant System Integration
+### Enhanced Assistant System Integration
 The skill system integrates seamlessly with the assistant workflow through knowledge augmentation:
 
 ```mermaid
@@ -366,16 +383,17 @@ Providers --> Responses["Enhanced Responses"]
 Responses --> Users["User Interaction"]
 ```
 
-**Integration Points:**
+**Enhanced Integration Points:**
 - Knowledge retrieval augments system prompts with skill-based guidance
 - Assistant selects appropriate provider (Ollama/OpenAI/Gemini)
 - Skills influence response structure and content quality
 - Dynamic adaptation based on user context and preferences
+- Real-time model availability checking
 
 ### Cross-Agent Compatibility
 The system maintains compatibility across different AI agents while preserving agent-specific customization:
 
-**Source-Based Organization:**
+**Enhanced Source-Based Organization:**
 - Claude skills: `~/.claude/skills/`
 - Cursor skills: `~/.cursor/skills-cursor/`
 - Agents skills: `~/.agents/skills/`
@@ -400,24 +418,28 @@ The system maintains compatibility across different AI agents while preserving a
 - Check file permissions and readability
 - Confirm agent-specific directory structure matches expectations
 - Validate YAML frontmatter syntax
+- Ensure SKILL.md is readable and not corrupted
 
 **UI Loading Problems:**
 - Ensure deploy-api service is running on port 8787
 - Verify Vite proxy configuration for development
 - Check browser console for network errors
 - Confirm CORS settings for API access
+- Validate that all three endpoints are accessible
 
 **Performance Issues:**
 - Monitor filesystem scanning for large directory trees
 - Check for permission errors causing repeated retries
 - Validate agent root directory existence and accessibility
 - Optimize SKILL.md file sizes and complexity
+- Consider reducing max depth or skip directories
 
 **Integration Failures:**
 - Verify LLM provider credentials and connectivity
 - Check knowledge base configuration and indexing
 - Validate assistant chat endpoint accessibility
 - Confirm model availability for selected providers
+- Test Ollama connection if using local models
 
 **Section sources**
 - [deploy-api.ts:910-956](file://server/deploy-api.ts#L910-L956)
@@ -429,22 +451,27 @@ The skill system architecture provides a robust, scalable foundation for extendi
 
 The architecture emphasizes developer experience through intuitive tooling, comprehensive documentation, and seamless integration with existing development workflows. The modular design allows for easy extension and customization while maintaining system stability and performance.
 
+The system has evolved to support multiple resource types beyond skills, including MCP servers and local models, providing a comprehensive platform for managing diverse AI resources. The enhanced UI capabilities offer powerful filtering and management tools for developers working with complex AI ecosystems.
+
 ## Appendices
 
-### Skill Specification Checklist
+### Enhanced Skill Specification Checklist
 - Include top-level YAML frontmatter with name and description
 - Provide structured guidance sections (mission, style foundations, rules, etc.)
 - Use consistent output structure and examples
 - Keep descriptions concise; rely on frontmatter for display
 - Test across multiple agent ecosystems
 - Validate discovery and UI rendering
+- Include quality gates and review criteria
+- Follow example constraint language patterns
 
 ### Development Environment Setup
-**Prerequisites:**
+**Enhanced Prerequisites:**
 - Node.js 22.x (recommended)
 - Modern browser with ES6+ support
 - Access to agent-specific directories
 - Optional: Ollama, LM Studio for local model testing
+- Git for repository management
 
 **Quick Start Commands:**
 ```bash
@@ -457,6 +484,9 @@ npm run dev
 # Create sample skill
 mkdir -p ~/.claude/skills/sample-skill
 echo "---\nname: sample\n---\n\n# Sample Skill" > ~/.claude/skills/sample-skill/SKILL.md
+
+# Test discovery
+curl http://localhost:8787/api/local-skills
 ```
 
 **Section sources**

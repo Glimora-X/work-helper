@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程启动控制台 - Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        .font-mono { font-family: 'Fira Code', monospace; }
+        /* 呼吸灯动画 */
+        @keyframes breathe {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        .animate-breathe { animation: breathe 2s infinite ease-in-out; }
+    </style>
+</head>
+<body class="bg-[#F4F6F9] text-[#1F2329] h-screen flex flex-col font-sans overflow-hidden">
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <aside class="w-[320px] bg-white border-r border-[#E4E7ED] flex flex-col justify-between shadow-sm z-10">
+            <div class="flex-1 overflow-y-auto p-4 space-y-3">
+                <div class="pb-2 border-b border-gray-100">
+                    <h1 class="text-base font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-bolt text-orange-500 mr-2"></i>工程快捷启动
+                    </h1>
+                    <p class="text-xs text-gray-400 mt-0.5">一键拉取依赖、Git 分支及多工作区服务</p>
+                </div>
+
+                <div class="relative">
+                    <input type="text" placeholder="搜索配置..." class="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-orange-500">
+                    <i class="fas fa-search absolute left-2.5 top-2.5 text-gray-400 text-xs"></i>
+                </div>
+
+                <div onclick="selectConfig('saas-cc-web', this)" class="config-card p-3.5 bg-orange-50/40 border-2 border-orange-500 rounded-xl cursor-pointer transition-all relative shadow-sm">
+                    <div class="flex items-start justify-between">
+                        <h3 class="text-sm font-bold text-gray-900 font-mono">saas-cc-web</h3>
+                        <span class="flex items-center text-[11px] font-medium text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                            <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-breathe"></span>运行中
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">独立启动单个前端核心工程</p>
+                    <div class="mt-2.5 flex flex-wrap gap-1">
+                        <span class="text-[10px] bg-white border border-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-mono">cc-web</span>
+                    </div>
+                </div>
+
+                <div onclick="selectConfig('all-in-one', this)" class="config-card p-3.5 bg-white border border-gray-200 hover:border-gray-300 rounded-xl cursor-pointer transition-all relative">
+                    <div class="flex items-start justify-between">
+                        <h3 class="text-sm font-bold text-gray-800 font-mono">全栈微服务 (API + Web)</h3>
+                        <span class="flex items-center text-[11px] font-medium text-gray-400 bg-gray-50 border border-gray-200 px-1.5 py-0.5 rounded">
+                            <span class="w-1.5 h-1.5 bg-gray-400 rounded-full mr-1.5"></span>已停止
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">所有子工程同步拉取并全量开启 dev</p>
+                    <div class="mt-2.5 flex flex-wrap gap-1">
+                        <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono">auth-service</span>
+                        <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono">user-center</span>
+                        <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono">cc-web</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-3 bg-gray-50 border-t border-[#E4E7ED] text-center">
+                <button class="text-xs text-gray-500 hover:text-orange-500 font-medium"><i class="fas fa-plus mr-1"></i> 添加新配置模板</button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col overflow-hidden">
+            
+            <section class="bg-white p-5 border-b border-[#E4E7ED] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-1.5">
+                    <div class="flex items-center space-x-2">
+                        <h2 id="current-title" class="text-base font-bold text-gray-900 font-mono">saas-cc-web</h2>
+                        <span class="text-xs bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md text-gray-600 font-mono"><i class="fas fa-code-branch mr-1 text-gray-400"></i>test-260423</span>
+                        <span class="text-xs bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-md text-gray-600 font-mono"><i class="fas fa-terminal mr-1 text-gray-400"></i>yarn dev</span>
+                    </div>
+                    <p class="text-xs text-gray-400 flex items-center">
+                        <i class="far fa-folder-open mr-1.5"></i> 路径: <span class="font-mono ml-1 text-gray-600">~/Documents/work-space/web/saas-cc-web</span>
+                    </p>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button id="main-action-btn" onclick="toggleEngine()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white text-sm font-semibold rounded-xl shadow-md shadow-red-600/10 transition-all flex items-center space-x-2">
+                        <i id="action-icon" class="fas fa-stop-circle"></i>
+                        <span id="action-text">停止当前工程</span>
+                    </button>
+                    <button onclick="restartEngine()" class="p-2.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 rounded-xl transition-all" title="重启服务">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </section>
+
+            <section class="flex-1 bg-[#12141A] flex flex-col overflow-hidden">
+                <div class="h-10 bg-[#1A1D26] px-4 flex items-center justify-between border-b border-gray-800/60">
+                    <div class="flex items-center space-x-1 h-full pt-1" id="terminal-tabs">
+                        <button onclick="switchTermTab(this)" class="px-3 h-full text-xs font-mono font-medium rounded-t-lg bg-[#12141A] text-orange-400 border-t-2 border-orange-500 flex items-center space-x-1.5">
+                            <span>Console (All)</span>
+                        </button>
+                        <button onclick="switchTermTab(this)" class="px-3 h-full text-xs font-mono font-medium rounded-t-lg text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+                            <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                            <span>cc-web</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-3 text-gray-400 text-xs">
+                        <button onclick="clearTerminal()" class="hover:text-gray-200" title="清空日志"><i class="fas fa-ban"></i></button>
+                        <button class="hover:text-gray-200 text-orange-400" title="自动滚动"><i class="fas fa-arrow-down"></i></button>
+                        <button class="hover:text-gray-200" title="全屏查看"><i class="fas fa-expand"></i></button>
+                    </div>
+                </div>
+
+                <div id="terminal-body" class="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed space-y-1 select-text selection:bg-gray-700 text-gray-300">
+                    <p class="text-gray-500">[2026-05-17 14:55:01] Loading local daemon hooks...</p>
+                    <p class="text-green-400">[info] Local Daemon Proxy [tty1] connected successfully.</p>
+                    <p class="text-gray-400">$ yarn run dev</p>
+                    <p class="text-gray-300">yarn run v1.22.19</p>
+                    <p class="text-blue-400">i [webpack-dev-server] Project is running at http://localhost:8080/</p>
+                    <p class="text-yellow-400">w [webpack] Compiled with warnings. (use --verbose to see details)</p>
+                    <p class="text-gray-300 font-bold text-green-500">✔ Compiled successfully in 4125ms</p>
+                    <div id="terminal-cursor" class="inline-block w-2 h-4 bg-gray-400 animate-pulse align-middle ml-1"></div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <footer class="h-9 bg-white border-t border-[#E4E7ED] px-4 flex items-center justify-between text-xs text-gray-500">
+        <div class="flex items-center space-x-4">
+            <span><i class="fas fa-check-circle text-green-500 mr-1.5"></i>本地守护进程已就绪 (PID: 84322)</span>
+        </div>
+        <div class="font-mono">v2.4.0-stable</div>
+    </footer>
+
+    <script>
+        let isRunning = true;
+
+        function selectConfig(id, element) {
+            document.querySelectorAll('.config-card').forEach(card => {
+                card.classList.remove('bg-orange-50/40', 'border-orange-500', 'shadow-sm');
+                card.classList.add('bg-white', 'border-gray-200');
+            });
+            element.classList.add('bg-orange-50/40', 'border-orange-500', 'shadow-sm');
+            element.classList.remove('bg-white', 'border-gray-200');
+            
+            document.getElementById('current-title').innerText = id;
+        }
+
+        function toggleEngine() {
+            const btn = document.getElementById('main-action-btn');
+            const icon = document.getElementById('action-icon');
+            const text = document.getElementById('action-text');
+            const term = document.getElementById('terminal-body');
+
+            if (isRunning) {
+                // 执行停止动作
+                btn.className = "px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-sm font-semibold rounded-xl shadow-md transition-all flex items-center space-x-2";
+                icon.className = "fas fa-play-circle";
+                text.innerText = "一键启动本地环境";
+                term.innerHTML += `<p class="text-red-400">[process] Process terminated by user signal.</p>`;
+                isRunning = false;
+            } else {
+                // 执行启动动作
+                btn.className = "px-6 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white text-sm font-semibold rounded-xl shadow-md transition-all flex items-center space-x-2";
+                icon.className = "fas fa-stop-circle";
+                text.innerText = "停止当前工程";
+                term.innerHTML += `<p class="text-green-400">[process] Restarting service engine... dev server polling standard pipelines.</p>`;
+                isRunning = true;
+            }
+        }
+
+        function restartEngine() {
+            const term = document.getElementById('terminal-body');
+            term.innerHTML += `<p class="text-blue-400">[info] Triggering hot-restart sequence...</p><p class="text-green-500">✔ Compiled successfully.</p>`;
+        }
+
+        function switchTermTab(btn) {
+            document.querySelectorAll('#terminal-tabs button').forEach(b => {
+                b.className = "px-3 h-full text-xs font-mono font-medium rounded-t-lg text-gray-400 hover:text-gray-200 flex items-center space-x-1.5";
+            });
+            btn.className = "px-3 h-full text-xs font-mono font-medium rounded-t-lg bg-[#12141A] text-orange-400 border-t-2 border-orange-500 flex items-center space-x-1.5";
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal-body').innerHTML = `<p class="text-gray-600">[Logs cleared]</p><div id="terminal-cursor" class="inline-block w-2 h-4 bg-gray-400 animate-pulse align-middle ml-1"></div>`;
+        }
+    </script>
+</body>
+</html>

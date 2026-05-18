@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研发配置中心 - Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        .font-mono {
+            font-family: 'Fira Code', 'SFMono-Regular', Consolas, Monaco, monospace;
+        }
+        /* 定制输入框 Focus 状态，呼吸灯效果 */
+        .custom-input:focus {
+            border-color: #FA541C !important;
+            box-shadow: 0 0 0 3px rgba(250, 84, 28, 0.15);
+            outline: none;
+        }
+        /* 隐藏滚动条 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-[#F8F9FA] text-[#1F2329] h-screen flex flex-col font-sans overflow-hidden">
+
+    <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-4 py-2.5 rounded-lg shadow-lg flex items-center space-x-2 transition-all duration-300 opacity-0 pointer-events-none z-50">
+        <i class="fas fa-check-circle text-green-500"></i>
+        <span id="toast-text" class="text-sm font-medium">写入成功！.env 文件已更新</span>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden pb-[64px]">
+        
+        <aside class="w-[260px] bg-white border-r border-[#DEE0E3] flex flex-col pt-6 justify-between">
+            <div>
+                <div class="px-6 mb-6">
+                    <h1 class="text-lg font-bold flex items-center tracking-wide text-gray-800">
+                        <i class="fas fa-sliders-h text-[#FA541C] mr-2.5"></i>高级配置中心
+                    </h1>
+                    <p class="text-xs text-[#646A73] mt-1 font-mono">deploy-api / .env</p>
+                </div>
+                
+                <nav class="space-y-1 px-3">
+                    <button onclick="switchTab('catalog')" id="tab-catalog" class="tab-btn w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all bg-[#FA541C]/10 text-[#FA541C]">
+                        <i class="fas fa-folder mr-3 w-5 text-center"></i>📁 启动工程目录
+                    </button>
+                    <button onclick="switchTab('jenkins')" id="tab-jenkins" class="tab-btn w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg text-[#646A73] hover:bg-gray-100 transition-all">
+                        <i class="fab fa-jenkins mr-3 w-5 text-center"></i>🤖 Jenkins 配置
+                    </button>
+                    <button onclick="switchTab('jira')" id="tab-jira" class="tab-btn w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg text-[#646A73] hover:bg-gray-100 transition-all">
+                        <i class="fab fa-jira mr-3 w-5 text-center"></i>🎯 Jira 配置
+                    </button>
+                    <button onclick="switchTab('wiki')" id="tab-wiki" class="tab-btn w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg text-[#646A73] hover:bg-gray-100 transition-all">
+                        <i class="fas fa-book mr-3 w-5 text-center"></i>📖 Confluence & 知识库
+                    </button>
+                </nav>
+            </div>
+            <div class="p-4 border-t border-[#DEE0E3] bg-gray-50 text-xs text-[#646A73] font-mono break-all">
+                读取路径: ~/Documents/AI/work-helper/.env
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto p-8 no-scrollbar bg-[#F8F9FA]">
+            
+            <section id="content-catalog" class="tab-content block space-y-6">
+                <div class="bg-white p-6 rounded-xl border border-[#DEE0E3] shadow-sm">
+                    <div class="mb-4">
+                        <h2 class="text-base font-bold text-[#1F2329]">启动工程目录</h2>
+                        <p class="text-xs text-[#646A73] mt-1">为常用仓库登记「显示名称」与「本地路径」。配置将持久化至本地 catalog.json</p>
+                    </div>
+                    
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-[#F8F9FA] border-b border-[#DEE0E3]">
+                                <th class="py-3 px-4 text-xs font-semibold text-[#646A73] w-1/3">显示名称</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-[#646A73] w-1/2">本地路径</th>
+                                <th class="py-3 px-4 text-xs font-semibold text-[#646A73] text-center w-20">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="catalog-table-body">
+                            <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors group">
+                                <td class="py-2.5 px-3">
+                                    <input type="text" value="Assistant API" class="w-full px-3 py-1.5 border border-gray-200 rounded-md text-sm custom-input">
+                                </td>
+                                <td class="py-2.5 px-3">
+                                    <input type="text" value="/Users/wangjuan/Documents/AI/work-helper" class="w-full px-3 py-1.5 border border-gray-200 rounded-md text-sm font-mono custom-input">
+                                </td>
+                                <td class="py-2.5 px-3 text-center">
+                                    <button onclick="deleteRow(this)" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <button onclick="addCatalogRow()" class="mt-4 w-full py-2.5 border border-dashed border-[#DEE0E3] text-sm text-[#646A73] hover:text-[#FA541C] hover:border-[#FA541C] rounded-lg bg-gray-50 hover:bg-orange-50/30 transition-all flex items-center justify-center font-medium">
+                        <i class="fas fa-plus mr-2 text-xs"></i> 添加一行
+                    </button>
+                </div>
+            </section>
+
+            <section id="content-jenkins" class="tab-content hidden space-y-6">
+                <div class="bg-white p-6 rounded-xl border border-[#DEE0E3] shadow-sm">
+                    <div class="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+                        <div>
+                            <h2 class="text-base font-bold text-[#1F2329]">🤖 Jenkins 集成设置</h2>
+                            <p class="text-xs text-[#646A73] mt-0.5">自动化构建与流水线凭据对接</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked onchange="toggleModule('jenkins', this)" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FA541C]"></div>
+                        </label>
+                    </div>
+
+                    <div id="form-jenkins" class="space-y-5 transition-all duration-300">
+                        <div class="flex items-center">
+                            <label class="w-[220px] font-mono text-sm text-gray-700 font-medium">JENKINS_USER</label>
+                            <div class="flex-1">
+                                <input type="text" placeholder="输入 Jenkins 用户名" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm custom-input">
+                            </div>
+                        </div>
+
+                        <div class="flex items-start pt-2">
+                            <label class="w-[220px] font-mono text-sm text-gray-700 font-medium mt-2">JENKINS_TOKEN</label>
+                            <div class="flex-1 space-y-1.5">
+                                <div class="relative flex items-center">
+                                    <input type="password" id="jenkins-token-input" placeholder="•••••••• (已配置，重新输入可覆盖)" class="w-full pl-3 pr-24 py-2 border border-gray-200 rounded-lg text-sm custom-input">
+                                    <div class="absolute right-3 flex items-center space-x-3 text-gray-400 text-sm">
+                                        <span class="px-2 py-0.5 text-xs font-semibold bg-green-50 text-green-600 rounded border border-green-200">已配置</span>
+                                        <button onclick="togglePassword('jenkins-token-input', this)" class="hover:text-gray-600"><i class="fas fa-eye"></i></button>
+                                        <button onclick="clearToken('jenkins-token-input', this)" class="hover:text-red-500"><i class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="content-jira" class="tab-content hidden space-y-6">
+                <div class="bg-white p-6 rounded-xl border border-[#DEE0E3] shadow-sm">
+                    <div class="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+                        <div>
+                            <h2 class="text-base font-bold text-[#1F2329]">🎯 Jira 集成设置</h2>
+                            <p class="text-xs text-[#646A73] mt-0.5">绑定 Jira 用于敏捷需求及工作项状态同步</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked onchange="toggleModule('jira', this)" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FA541C]"></div>
+                        </label>
+                    </div>
+
+                    <div id="form-jira" class="space-y-5 transition-all duration-300">
+                        <div class="flex items-center">
+                            <label class="w-[220px] font-mono text-sm text-gray-700 font-medium">JIRA_SERVER_URL</label>
+                            <div class="flex-1">
+                                <input type="text" placeholder="https://your-domain.atlassian.net" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono custom-input">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center">
+                            <label class="w-[220px] font-mono text-sm text-gray-700 font-medium">JIRA_USERNAME</label>
+                            <div class="flex-1">
+                                <input type="text" placeholder="输入 Jira 账号邮箱" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm custom-input">
+                            </div>
+                        </div>
+
+                        <div class="flex items-start pt-1">
+                            <label class="w-[220px] font-mono text-sm text-gray-700 font-medium mt-2">JIRA_PASSWORD</label>
+                            <div class="flex-1">
+                                <div class="relative flex items-center">
+                                    <input type="password" id="jira-pwd-input" placeholder="•••••••• (已配置，重新输入可覆盖)" class="w-full pl-3 pr-24 py-2 border border-gray-200 rounded-lg text-sm custom-input">
+                                    <div class="absolute right-3 flex items-center space-x-3 text-gray-400 text-sm">
+                                        <span class="px-2 py-0.5 text-xs font-semibold bg-green-50 text-green-600 rounded border border-green-200">已配置</span>
+                                        <button onclick="togglePassword('jira-pwd-input', this)" class="hover:text-gray-600"><i class="fas fa-eye"></i></button>
+                                        <button onclick="clearToken('jira-pwd-input', this)" class="hover:text-red-500"><i class="fas fa-trash-alt"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-gray-100">
+                            <details class="group">
+                                <summary class="flex items-center text-xs font-medium text-[#646A73] hover:text-[#1F2329] cursor-pointer list-none select-none py-2">
+                                    <i class="fas fa-chevron-right mr-2 transition-transform duration-200 group-open:rotate-90 text-[10px]"></i>
+                                    高级选项 (Advanced Settings)
+                                </summary>
+                                <div class="mt-4 pl-6 space-y-4 border-l-2 border-gray-100 group-open:animate-fadeIn">
+                                    <div class="flex items-center">
+                                        <div class="w-[196px] flex items-center text-sm font-mono text-gray-600">
+                                            JIRA_REST_PATH_PREFIX
+                                            <span class="ml-1.5 text-gray-400 cursor-help" title="REST API的基本路由前缀，默认无需修改"><i class="far fa-question-circle text-xs"></i></span>
+                                        </div>
+                                        <div class="flex-1">
+                                            <input type="text" placeholder="/rest/api/2" class="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-mono custom-input">
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="content-wiki" class="tab-content hidden space-y-6">
+                <div class="bg-white p-6 rounded-xl border border-[#DEE0E3] shadow-sm">
+                    <div class="mb-6 border-b border-gray-100 pb-4">
+                        <h2 class="text-base font-bold text-[#1F2329]">📖 Confluence / 知识库高级检索配置</h2>
+                        <p class="text-xs text-[#646A73] mt-0.5">本地体检工具对接企业内部知识库的路由路由模板参数</p>
+                    </div>
+                    
+                    <div class="space-y-5">
+                        <div class="flex items-center">
+                            <label class="w-[240px] font-mono text-sm text-gray-700 font-medium">ASSISTANT_KB_LOCAL_DIRS</label>
+                            <div class="flex-1"><input type="text" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono custom-input"></div>
+                        </div>
+                        <div class="flex items-center">
+                            <label class="w-[240px] font-mono text-sm text-gray-700 font-medium">ASSISTANT_KB_SEARCH_URLS</label>
+                            <div class="flex-1"><input type="text" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono custom-input"></div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-[240px] font-mono text-sm text-gray-700 font-medium flex items-center">
+                                ASSISTANT_KIKI_TEMPLATE
+                                <span class="ml-1.5 text-gray-400 cursor-help" title="自定义 Wiki 的高频查询模板占位符"><i class="far fa-question-circle text-xs"></i></span>
+                            </div>
+                            <div class="flex-1"><input type="text" placeholder="https://wiki.company.com/search?q=${query}" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono custom-input"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <footer class="fixed bottom-0 left-0 right-0 h-[64px] bg-white border-t border-[#DEE0E3] px-8 flex items-center justify-end shadow-[0_-2px_10px_rgba(0,0,0,0.03)] z-40">
+        <div class="flex items-center space-x-4">
+            <span class="text-xs text-[#646A73]">变更将实时覆盖至本地磁盘环境。</span>
+            <button onclick="handleSave(this)" class="px-6 py-2 bg-[#FA541C] hover:bg-[#D4380D] active:scale-[0.98] text-white text-sm font-medium rounded-lg transition-all flex items-center space-x-2 shadow-sm shadow-orange-500/20">
+                <i id="btn-icon" class="fas fa-save"></i>
+                <span id="btn-text">合并写入 .env</span>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        // 1. Tab 切换逻辑
+        function switchTab(tabId) {
+            // 隐藏所有内容区
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+            // 取消所有Tab按钮激活状态
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-[#FA541C]/10', 'text-[#FA541C]');
+                btn.classList.add('text-[#646A73]', 'hover:bg-gray-100');
+            });
+            
+            // 激活当前点击的项
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.add('bg-[#FA541C]/10', 'text-[#FA541C]');
+            activeBtn.classList.remove('text-[#646A73]', 'hover:bg-gray-100');
+        }
+
+        // 2. 总控开关连带禁用逻辑
+        function toggleModule(moduleId, checkbox) {
+            const formContainer = document.getElementById(`form-${moduleId}`);
+            if (checkbox.checked) {
+                formContainer.style.opacity = "1";
+                formContainer.style.pointerEvents = "auto";
+                formContainer.querySelectorAll('input, button').forEach(el => el.removeAttribute('disabled'));
+            } else {
+                formContainer.style.opacity = "0.35";
+                formContainer.style.pointerEvents = "none";
+                formContainer.querySelectorAll('input, button').forEach(el => el.setAttribute('disabled', 'true'));
+            }
+        }
+
+        // 3. 密码框明文/密文切换
+        function togglePassword(inputId, iconBtn) {
+            const input = document.getElementById(inputId);
+            const icon = iconBtn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        // 4. 清除并标记配置
+        function clearToken(inputId, btn) {
+            const input = document.getElementById(inputId);
+            input.value = '';
+            input.placeholder = '尚未配置，请输入';
+            const tag = btn.parentNode.querySelector('span');
+            if(tag) {
+                tag.className = 'px-2 py-0.5 text-xs font-semibold bg-gray-100 text-gray-500 rounded border border-gray-200';
+                tag.innerText = '待删除';
+            }
+        }
+
+        // 5. 启动目录：添加新行
+        function addCatalogRow() {
+            const tbody = document.getElementById('catalog-table-body');
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors group';
+            tr.innerHTML = `
+                <td class="py-2.5 px-3">
+                    <input type="text" placeholder="e.g. Wiki Service" class="w-full px-3 py-1.5 border border-gray-200 rounded-md text-sm custom-input">
+                </td>
+                <td class="py-2.5 px-3">
+                    <input type="text" placeholder="e.g. /Users/workspace/project" class="w-full px-3 py-1.5 border border-gray-200 rounded-md text-sm font-mono custom-input">
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                    <button onclick="deleteRow(this)" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            // 自动聚焦新行第一个输入框
+            tr.querySelector('input').focus();
+        }
+
+        // 6. 启动目录：删除行
+        function deleteRow(btn) {
+            const row = btn.closest('tr');
+            row.remove();
+        }
+
+        // 7. 底部保存 Loading 动画及 Toast 吐司交互
+        function handleSave(button) {
+            const icon = document.getElementById('btn-icon');
+            const text = document.getElementById('btn-text');
+            const toast = document.getElementById('toast');
+
+            // 按钮进入 Loading 状态
+            button.disabled = true;
+            icon.className = 'fas fa-spinner animate-spin';
+            text.innerText = '正在写入...';
+
+            // 模拟异步写入 IO 操作
+            setTimeout(() => {
+                // 恢复按钮状态
+                button.disabled = false;
+                icon.className = 'fas fa-save';
+                text.innerText = '合并写入 .env';
+
+                // 弹出 Toast
+                toast.classList.remove('opacity-0', 'pointer-events-none');
+                toast.classList.add('opacity-100');
+
+                // 2.5秒后自动隐退
+                setTimeout(() => {
+                    toast.classList.remove('opacity-100');
+                    toast.classList.add('opacity-0', 'pointer-events-none');
+                }, 2500);
+
+            }, 1200);
+        }
+    </script>
+</body>
+</html>

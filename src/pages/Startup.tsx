@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type MouseEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Terminal, Settings, Play, Square, Folder, FolderTree, GitBranch, TerminalSquare, Layers, Command as CmdIcon, CheckCircle2, Plus, Edit2, Trash2, X, Save, Loader2, Zap } from 'lucide-react';
+import { Terminal, Settings, Play, Square, Folder, FolderTree, GitBranch, TerminalSquare, Layers, Command as CmdIcon, CheckCircle2, Plus, Edit2, Trash2, X, Save, Loader2, Zap, Search, ArrowDown, Maximize2, Minimize2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 
 type IDEType = 'cursor' | 'code' | 'webstorm';
@@ -136,15 +136,40 @@ export default function Startup() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<StartupProfile | null>(null);
 
+  // Search & Filter (NEW FEATURE)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set());
+
+  // Terminal Tabs (NEW FEATURE)
+  const [activeTerminalTab, setActiveTerminalTab] = useState<string>('all');
+  const [isTerminalFullscreen, setIsTerminalFullscreen] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [serviceLogs, setServiceLogs] = useState<Record<string, StartupLog[]>>({});
+
   const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
   const activeRun = runsByProfileId[activeProfileId];
   const logs = activeRun?.logs || [];
   const isCurrentBootstrapping = activeRun?.status === 'bootstrapping';
   const isCurrentRunning = activeRun?.status === 'bootstrapping' || activeRun?.status === 'running';
 
+  // Filter Logic for Profile List (NEW FEATURE)
+  const filteredProfiles = profiles.filter(p => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      p.title.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.aliases?.some(a => a.toLowerCase().includes(q)) ||
+      p.projects.some(proj => proj.name.toLowerCase().includes(q))
+    );
+  });
+
   useEffect(() => {
-    logsRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (autoScroll) {
+      logsRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, autoScroll]);
 
   useEffect(() => {
     return () => {
@@ -180,7 +205,8 @@ export default function Startup() {
     };
   }, []);
 
-  const addLog = (profileId: string, text: string, type = 'info') => {
+  const addLog = (profileId: string, text: string, type = 'info', serviceName?: string) => {
+    // Global logs (EXISTING BEHAVIOR - MUST KEEP)
     setRunsByProfileId(prev => {
       const current = prev[profileId] || { status: 'completed', logs: [] };
       return {
@@ -191,6 +217,14 @@ export default function Startup() {
         },
       };
     });
+    
+    // Service-specific logs (NEW FEATURE - optional enhancement)
+    if (serviceName) {
+      setServiceLogs(prev => ({
+        ...prev,
+        [serviceName]: [...(prev[serviceName] || []), { id: Math.random(), text, type }]
+      }));
+    }
   };
 
   const updateRunState = (profileId: string, patch: Partial<ProfileRunState>) => {
@@ -200,6 +234,16 @@ export default function Startup() {
         ...prev,
         [profileId]: { ...current, ...patch },
       };
+    });
+  };
+
+  // Batch Selection Handlers (NEW FEATURE)
+  const toggleBatchSelection = (id: string) => {
+    setSelectedProfileIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -358,33 +402,146 @@ export default function Startup() {
           subtitle="一键配置并拉起本地 IDE、Git 分支及多工作区的依赖服务"
         />
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Top Info Bar (Design-aligned) */}
+          {activeProfile && !isEditing && (
+            <div className="pkmer-top-info-bar pkmer-fade-in">
+              <div className="pkmer-top-info-bar__left">
+                <span className="pkmer-top-info-bar__title">{activeProfile.title}</span>
+                <div className="pkmer-top-info-bar__meta">
+                  {activeProfile.projects[0] && (
+                    <span className="pkmer-top-info-bar__tag">
+                      <GitBranch className="w-3 h-3 inline mr-1" />
+                      {activeProfile.projects[0].branch}
+                    </span>
+                  )}
+                  {activeProfile.projects[0] && (
+                    <span className="pkmer-top-info-bar__tag">
+                      <TerminalSquare className="w-3 h-3 inline mr-1" />
+                      {activeProfile.projects[0].runCmd}
+                    </span>
+                  )}
+                  {activeProfile.projects[0] && (
+                    <span className="pkmer-top-info-bar__path">
+                      <Folder className="w-3 h-3 inline mr-1" />
+                      {activeProfile.projects[0].path}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              {/* Action Buttons (Fixed Top-Right) */}
+              <div className="pkmer-top-info-bar__actions">
+                {isCurrentRunning && activeRun?.runId && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleStopCurrentRun}
+                      className="pkmer-btn-stop-fixed"
+                    >
+                      <Square className="w-3.5 h-3.5" fill="currentColor" />
+                      停止当前工程
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleStopCurrentRun();
+                        setTimeout(() => handleLaunch(), 500);
+                      }}
+                      className="pkmer-btn-refresh"
+                      title="重启"
+                    >
+                      <Loader2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                {!isCurrentRunning && (
+                  <button 
+                    type="button"
+                    onClick={handleLaunch}
+                    disabled={isCurrentBootstrapping}
+                    className="pkmer-btn-launch" style={{ width: 'auto', padding: '0.5rem 1.25rem' }}
+                  >
+                    {isCurrentBootstrapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" fill="currentColor" />}
+                    {isCurrentBootstrapping ? '启动中...' : '启动'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleEdit}
+                  disabled={isCurrentRunning}
+                  className="pkmer-btn-refresh"
+                  title="编辑配置"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           
-          {/* Left: Profile List */}
-          <div className="lg:col-span-4 flex flex-col gap-3 h-full">
+          {/* Main Workspace: Left Sidebar + Right Terminal */}
+          <div className="flex-1 min-h-0 flex gap-6">
+            {/* Left Sidebar: 280px */}
+            <aside className="w-[280px] flex-shrink-0 flex flex-col gap-3 h-full">
+             {/* Search Input */}
+             <div className="relative">
+               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 pkmer-icon-muted" />
+               <input
+                 type="text"
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 placeholder="搜索配置..."
+                 className="pkmer-search-input"
+               />
+             </div>
+             
+             {/* Batch Mode Toggle */}
+             <button
+               onClick={() => setIsBatchMode(!isBatchMode)}
+               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                 isBatchMode ? 'pkmer-btn-ink' : 'pkmer-text-secondary border-[color:var(--color-hairline)]'
+               }`}
+             >
+               {isBatchMode ? '✓ 多选模式' : '☐ 多选模式'}
+             </button>
+             
+             {/* Profile List */}
              <div className="flex-1 overflow-y-auto w-full flex flex-col gap-3 pr-2 scrollbar-hide pb-6">
-               {profiles.length === 0 ? (
+               {filteredProfiles.length === 0 ? (
                  <div className="text-[11px] pkmer-text-muted border border-[color:var(--color-hairline)] rounded-lg p-3 text-center bg-[color:var(--color-shell-bg)] shrink-0">
-                   暂无配置文件
+                   {searchQuery ? '无匹配配置' : '暂无配置文件'}
                  </div>
-               ) : profiles.map(profile => (
+               ) : filteredProfiles.map(profile => (
                  <div
                    key={profile.id}
-                   onClick={() => !isEditing && setActiveProfileId(profile.id)}
+                   onClick={() => !isEditing && !isBatchMode && setActiveProfileId(profile.id)}
                    className={`text-left p-4 rounded-xl border transition-all cursor-pointer relative group shrink-0 pkmer-profile-card ${
-                     activeProfileId === profile.id ? 'pkmer-profile-card--active' : 'opacity-90'
+                     activeProfileId === profile.id && !isBatchMode ? 'pkmer-profile-card--active' : 'opacity-90'
                    } ${isEditing ? 'pkmer-profile-card--disabled' : ''}`}
                  >
                    <div className="flex justify-between items-start mb-2">
                      <div className="flex items-center gap-2">
+                       {isBatchMode && (
+                         <input
+                           type="checkbox"
+                           checked={selectedProfileIds.has(profile.id)}
+                           onChange={() => toggleBatchSelection(profile.id)}
+                           className="pkmer-checkbox"
+                           onClick={(e) => e.stopPropagation()}
+                         />
+                       )}
                        {profile.type === 'single' ? (
                          <Folder className="w-4 h-4 pkmer-icon-indigo shrink-0" />
                        ) : (
                          <FolderTree className="w-4 h-4 pkmer-icon-secondary shrink-0" />
                        )}
                        <span className="font-semibold text-sm pkmer-text-body">{profile.title}</span>
-                       {(runsByProfileId[profile.id]?.status === 'bootstrapping' || runsByProfileId[profile.id]?.status === 'running') && (
-                         <span className="h-2 w-2 rounded-full bg-green-500" title="运行中" />
+                       {/* Status Indicator */}
+                       {runsByProfileId[profile.id]?.status === 'running' && (
+                         <span className="pkmer-status-dot pkmer-status-dot--running" title="运行中" />
+                       )}
+                       {runsByProfileId[profile.id]?.status === 'bootstrapping' && (
+                         <span className="pkmer-status-dot pkmer-status-dot--bootstrapping" title="启动中" />
                        )}
                      </div>
                      <button 
@@ -413,12 +570,12 @@ export default function Startup() {
                  + 添加新配置
                </button>
              </div>
-          </div>
+          </aside>
 
-          {/* Right: Configuration & Console */}
-          <div className="lg:col-span-8 flex min-h-0 flex-col gap-4 overflow-hidden">
+          {/* Right Workspace: Terminal Dominance */}
+          <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
             
-            {/* Top: Edit Form OR Info Preview Card */}
+            {/* Edit Form (Only show when editing) */}
             {isEditing && editForm ? (
               <div className="pkmer-form-shell">
                 <div className="flex items-center justify-between border-b border-[color:var(--color-hairline)] pb-3 shrink-0">
@@ -542,72 +699,34 @@ export default function Startup() {
                 </div>
               </div>
             ) : (
-              // Preivew Plan Card
-              <div className="pkmer-preview-card">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                  <Layers className="w-24 h-24 pkmer-text-muted" />
-                </div>
-                
-                <div className="flex items-center justify-between z-10">
-                  <h3 className="text-sm font-semibold pkmer-text-body flex items-center gap-2">
-                    <CmdIcon className="w-4 h-4 pkmer-icon-muted shrink-0" /> 
-                    执行计划预览 
-                    <button type="button" onClick={handleEdit} disabled={isCurrentRunning || !activeProfile} className="pkmer-icon-muted hover:text-[color:var(--color-primary-500)] transition-colors ml-2 disabled:opacity-40">
-                      <Edit2 className="w-3.5 h-3.5"/>
-                    </button>
-                  </h3>
-                  
-                  {activeProfile && (
-                    <div className="flex items-center gap-2 text-xs font-mono pkmer-chip py-1 px-2 pkmer-text-secondary">
-                      Target IDE: {activeProfile.ide}
-                    </div>
-                  )}
-                </div>
-
-                <div className="z-10 grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto pr-2">
-                  {!activeProfile ? (
-                    <div className="text-xs pkmer-text-muted italic">请选择当前功能下的配置文件...</div>
-                  ) : activeProfile.projects.map((proj, idx) => (
-                    <div key={idx} className="pkmer-subcard">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-bold font-mono pkmer-text-body">{proj.name}</span>
-                        <span className="pkmer-chip-branch">
-                          <GitBranch className="w-3 h-3 shrink-0" /> {proj.branch}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-[11px] font-mono pkmer-text-secondary overflow-hidden">
-                        <div className="flex items-center gap-1 truncate"><Folder className="w-3 h-3 shrink-0 pkmer-icon-muted" /> <span className="truncate">{proj.path}</span></div>
-                        <div className="flex items-center gap-1 text-[color:var(--color-accent)] shrink-0 opacity-90"><TerminalSquare className="w-3 h-3" /> {proj.runCmd || 'none'}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2 z-10 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button 
-                    type="button"
-                    onClick={handleLaunch}
-                    disabled={isCurrentRunning || !activeProfile}
-                    className="pkmer-btn-ink w-full py-3 text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
-                  >
-                    {isCurrentBootstrapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" fill="currentColor" />}
-                    {isCurrentBootstrapping ? '环境构建与依赖挂载中...' : isCurrentRunning ? '当前配置运行中' : '一键启动本地环境'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStopCurrentRun}
-                    disabled={!isCurrentRunning || !activeRun?.runId}
-                    className="pkmer-btn-danger-outline"
-                  >
-                    <Square className="w-4 h-4" fill="currentColor" />
-                    停止当前工程
-                  </button>
-                </div>
-              </div>
-            )}
+              // Terminal takes full space when not editing
+              <div className="flex-1 min-h-0 pkmer-fade-in">
 
             {/* Bottom: Simulated Daemon Terminal */}
-            <div className="pkmer-terminal flex-1 min-h-0">
+            <div className={`pkmer-terminal flex-1 min-h-0 ${isTerminalFullscreen ? 'pkmer-terminal--fullscreen' : ''}`}>
+              {/* Terminal Tabs (NEW FEATURE) */}
+              <div className="pkmer-terminal-tabs">
+                <button
+                  className={`pkmer-terminal-tab ${activeTerminalTab === 'all' ? 'pkmer-terminal-tab--active' : ''}`}
+                  onClick={() => setActiveTerminalTab('all')}
+                >
+                  All
+                </button>
+                {activeProfile?.projects.map((proj, idx) => (
+                  <button
+                    key={idx}
+                    className={`pkmer-terminal-tab ${activeTerminalTab === proj.name ? 'pkmer-terminal-tab--active' : ''}`}
+                    onClick={() => setActiveTerminalTab(proj.name)}
+                  >
+                    {proj.name}
+                    {serviceLogs[proj.name]?.some(l => l.type === 'error') && (
+                      <span className="ml-1 text-[color:var(--danger)]">●</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Terminal Chrome with Toolbar */}
               <div className="pkmer-terminal__chrome">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]" />
@@ -618,40 +737,78 @@ export default function Startup() {
                   {!isCurrentBootstrapping && logs.length > 0 && <CheckCircle2 className="w-3 h-3 text-[color:var(--success)] shrink-0" />}
                   <p className="text-[10px] font-mono pkmer-text-muted">Local Daemon Proxy [tty1]</p>
                 </div>
+                {/* Terminal Actions */}
+                <div className="pkmer-terminal-toolbar">
+                  <button
+                    className="pkmer-terminal-toolbar-btn"
+                    onClick={() => setRunsByProfileId(prev => ({
+                      ...prev,
+                      [activeProfileId]: { ...prev[activeProfileId], logs: [] }
+                    }))}
+                    title="清屏"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    className={`pkmer-terminal-toolbar-btn ${autoScroll ? 'text-[color:var(--success)]' : ''}`}
+                    onClick={() => setAutoScroll(!autoScroll)}
+                    title="自动滚动"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    className="pkmer-terminal-toolbar-btn"
+                    onClick={() => setIsTerminalFullscreen(!isTerminalFullscreen)}
+                    title="全屏"
+                  >
+                    {isTerminalFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
               
               <div className="pkmer-terminal__body">
-                {logs.length === 0 ? (
-                  <div className="pkmer-text-muted flex h-full items-center justify-center italic text-xs">Waiting for daemon hook...</div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {logs.map(log => (
-                      <div key={log.id} className="flex gap-3">
-                        <span
-                          className={`shrink-0 ${
-                            log.type === 'system'
-                              ? 'pkmer-log-line--system font-bold'
-                              : log.type === 'cmd'
-                                ? 'pkmer-log-line--cmd'
-                                : log.type === 'success'
-                                  ? 'pkmer-log-line--success'
-                                  : log.type === 'error'
-                                    ? 'pkmer-log-line--error'
-                                    : log.type === 'warn'
-                                      ? 'pkmer-log-line--warn'
-                                      : 'pkmer-log-line--muted'
-                          }`}
-                        >
-                          {log.text}
-                        </span>
-                      </div>
-                    ))}
-                    <div ref={logsRef} />
-                  </div>
-                )}
+                {(() => {
+                  const displayLogs = activeTerminalTab === 'all' 
+                    ? logs 
+                    : (serviceLogs[activeTerminalTab] || []);
+                  
+                  if (displayLogs.length === 0) {
+                    return <div className="pkmer-text-muted flex h-full items-center justify-center italic text-xs">Waiting for daemon hook...</div>;
+                  }
+                  
+                  return (
+                    <div className="flex flex-col gap-1">
+                      {displayLogs.map(log => (
+                        <div key={log.id} className="flex gap-3">
+                          <span
+                            className={`shrink-0 ${
+                              log.type === 'system'
+                                ? 'pkmer-log-line--system font-bold'
+                                : log.type === 'cmd'
+                                  ? 'pkmer-log-line--cmd'
+                                  : log.type === 'success'
+                                    ? 'pkmer-log-line--success'
+                                    : log.type === 'error'
+                                      ? 'pkmer-log-line--error'
+                                      : log.type === 'warn'
+                                        ? 'pkmer-log-line--warn'
+                                        : 'pkmer-log-line--muted'
+                            }`}
+                          >
+                            {log.text}
+                          </span>
+                        </div>
+                      ))}
+                      <div ref={logsRef} />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
+              </div>
+            )}
 
+          </main>
           </div>
         </div>
       </div>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程部署控制台 (DAG 编排)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+        .font-mono { font-family: 'Fira Code', monospace; }
+        /* 拟物连线 */
+        .dag-line::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -24px;
+            width: 2px;
+            height: 24px;
+            background: #CBD5E1;
+            transform: translateX(-50%);
+            z-index: 0;
+        }
+    </style>
+</head>
+<body class="bg-[#F6F8FA] text-[#1F2329] h-screen flex flex-col font-sans overflow-hidden">
+
+    <header class="h-14 bg-white border-b border-[#E4E7ED] px-6 flex items-center justify-between shadow-sm z-30">
+        <div class="flex items-center space-x-3">
+            <div class="bg-orange-500 text-white p-2 rounded-lg"><i class="fas fa-cubes text-sm"></i></div>
+            <div>
+                <h1 class="text-sm font-bold text-gray-900">工程部署集成中心</h1>
+                <p class="text-xs text-gray-400">服务端 DAG 可视化依赖编排 + Jenkins 多流联动</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-2">
+            <div class="group relative cursor-pointer flex items-center text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full shadow-sm">
+                <i class="fas fa-exclamation-triangle mr-1.5 animate-pulse"></i>Jenkins 不可用
+                <div class="absolute right-0 top-7 w-64 p-3 bg-gray-900 text-white rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl leading-relaxed text-[11px]">
+                    主 Jenkins 集群故障。控制台已自动激活 <span class="text-yellow-400">Fallback 本地托管构建机制</span>，不影响当前部署。
+                </div>
+            </div>
+            <div class="flex items-center text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                <i class="fas fa-code-branch mr-1.5"></i>Jira fallback
+            </div>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <aside class="w-[240px] bg-white border-r border-[#E4E7ED] flex flex-col justify-between p-4 space-y-4">
+            <div class="space-y-4">
+                <div class="text-xs font-bold text-gray-400 tracking-wider">常用部署链路</div>
+                <div class="space-y-1.5">
+                    <button onclick="loadTemplate('MDF 核心链路')" class="w-full text-left p-2 rounded-lg text-xs hover:bg-gray-50 flex items-center justify-between border border-transparent hover:border-gray-200 group">
+                        <span class="text-gray-700 font-medium"><i class="far fa-star mr-2 text-amber-500"></i>MDF 核心链路</span>
+                        <span class="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 group-hover:bg-orange-100 group-hover:text-orange-600">2步</span>
+                    </button>
+                    <button onclick="loadTemplate('UI-WEB 完整发布')" class="w-full text-left p-2 rounded-lg text-xs hover:bg-gray-50 flex items-center justify-between border border-transparent hover:border-gray-200 group">
+                        <span class="text-gray-700 font-medium"><i class="far fa-star mr-2 text-amber-500"></i>UI-WEB 完整发布</span>
+                        <span class="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 group-hover:bg-orange-100 group-hover:text-orange-600">3步</span>
+                    </button>
+                </div>
+                <hr class="border-gray-100">
+                <div class="text-xs font-bold text-gray-400 tracking-wider">过滤资产形态</div>
+                <div class="flex space-x-1 p-0.5 bg-gray-100 rounded-lg text-xs">
+                    <button class="flex-1 py-1 text-center bg-white rounded-md shadow-sm font-medium">全量工程</button>
+                    <button class="flex-1 py-1 text-center text-gray-500 hover:text-gray-900">核心模板</button>
+                </div>
+            </div>
+            <div class="p-3 bg-orange-50 border border-orange-100 rounded-xl text-[11px] text-orange-700 leading-normal">
+                <i class="fas fa-info-circle mr-1"></i> 离开当前页面后，后台依赖构建状态及日志仍将实时安全挂载保持。
+            </div>
+        </aside>
+
+        <main class="w-[420px] bg-gray-50/50 border-r border-[#E4E7ED] flex flex-col justify-between overflow-hidden">
+            <div class="p-4 bg-white border-b border-[#E4E7ED] space-y-2">
+                <div class="relative flex items-center">
+                    <input type="text" id="ai-input" placeholder="输入自然语言需求，由 Copilot 自动生成依赖图..." class="w-full pl-8 pr-20 py-2 bg-gray-50 border border-gray-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 rounded-xl text-xs focus:outline-none transition-all">
+                    <i class="fas fa-magic absolute left-2.5 text-gray-400 text-xs"></i>
+                    <button onclick="triggerAIGenerate()" class="absolute right-1.5 px-2.5 py-1 bg-gradient-to-r bounding-box from-orange-500 to-amber-500 text-white text-[11px] font-medium rounded-lg hover:brightness-105 active:scale-95 transition-all shadow-sm">
+                        AI 解析
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col items-center relative no-scrollbar" id="dag-container">
+                <div class="w-full flex items-center justify-between text-xs text-gray-400 px-2 pb-2 border-b border-gray-200/60">
+                    <span class="font-medium text-gray-700"><i class="fas fa-project-diagram mr-1.5 text-gray-500"></i>DAG 依赖关系网</span>
+                    <div class="space-x-3">
+                        <button class="hover:text-gray-700"><i class="fas fa-save mr-1"></i>存为模板</button>
+                        <button onclick="resetDag()" class="hover:text-gray-700"><i class="fas fa-redo-alt mr-1"></i>清空</button>
+                    </div>
+                </div>
+
+                <div class="w-full bg-white border border-gray-200 hover:border-gray-300 rounded-xl p-3.5 shadow-sm relative dag-line flex items-center justify-between group">
+                    <div class="flex items-center space-x-3">
+                        <div class="cursor-grab text-gray-300 group-hover:text-gray-500 transition-colors"><i class="fas fa-ellipsis-v"></i><i class="fas fa-ellipsis-v -ml-0.5"></i></div>
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-900 font-mono">mdf-biz</h4>
+                            <p class="text-[10px] text-gray-400 font-mono mt-0.5">service-core / v1.4.2</p>
+                        </div>
+                    </div>
+                    <span id="status-tag-1" class="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 font-medium px-2 py-0.5 rounded-md flex items-center">
+                        <i class="fas fa-clock mr-1.5"></i>待构建
+                    </span>
+                </div>
+
+                <div class="w-full bg-white border border-gray-200 hover:border-gray-300 rounded-xl p-3.5 shadow-sm relative flex items-center justify-between group">
+                    <div class="flex items-center space-x-3">
+                        <div class="cursor-grab text-gray-300 group-hover:text-gray-500 transition-colors"><i class="fas fa-ellipsis-v"></i><i class="fas fa-ellipsis-v -ml-0.5"></i></div>
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-900 font-mono">saas-cc-web-metapage</h4>
+                            <p class="text-[10px] text-gray-400 font-mono mt-0.5">frontend-application / main</p>
+                        </div>
+                    </div>
+                    <span id="status-tag-2" class="text-[10px] bg-blue-50 text-blue-600 border border-blue-200 font-medium px-2 py-0.5 rounded-md flex items-center">
+                        <i class="fas fa-clock mr-1.5"></i>待构建
+                    </span>
+                </div>
+
+                <button onclick="addNewNode()" class="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500 hover:text-orange-500 hover:border-orange-500 hover:bg-orange-50/20 transition-all flex items-center justify-center font-medium">
+                    <i class="fas fa-plus-circle mr-1.5"></i> 添加并行/串行阶段节点
+                </button>
+            </div>
+
+            <div class="p-4 bg-white border-t border-[#E4E7ED]">
+                <button id="deploy-master-btn" onclick="startGlobalPipeline()" class="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:brightness-105 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center space-x-2">
+                    <i id="master-icon" class="fas fa-rocket"></i>
+                    <span id="master-text">开始可视化构架与部署</span>
+                </button>
+            </div>
+        </main>
+
+        <section class="flex-1 bg-[#111216] flex flex-col overflow-hidden">
+            <div class="h-11 bg-[#18191F] px-4 flex items-center justify-between border-b border-gray-900/40">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                    <span class="text-xs text-gray-400 font-mono ml-4">日志输出 - System Core Execution Pipelin</span>
+                </div>
+                <div class="text-xs text-gray-500 flex items-center space-x-3">
+                    <button class="hover:text-gray-300"><i class="fas fa-terminal mr-1"></i>原生终端</button>
+                    <button onclick="clearTerminal()" class="hover:text-gray-300"><i class="fas fa-trash-alt"></i></button>
+                </div>
+            </div>
+
+            <div id="terminal-body" class="flex-1 overflow-y-auto p-5 font-mono text-[11px] text-gray-300 space-y-1.5 leading-relaxed selection:bg-gray-800">
+                <p class="text-gray-500">[23:07:57] Applied predefined workspace core topology. Awaiting master trigger.</p>
+                <div id="terminal-injection-point"></div>
+                <div id="terminal-cursor" class="inline-block w-1.5 h-3.5 bg-orange-500 align-middle ml-0.5 animate-pulse"></div>
+            </div>
+
+            <div class="h-8 bg-[#18191F] px-4 flex items-center justify-between text-[11px] text-gray-500 border-t border-gray-900/40">
+                <div class="flex items-center"><i class="fas fa-circle text-blue-500 mr-2 text-[8px]"></i>状态: <span id="footer-status" class="ml-1 text-gray-400">就绪中</span></div>
+                <div>TTY: Local-Daemon Proxy-2</div>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        function triggerAIGenerate() {
+            const val = document.getElementById('ai-input').value;
+            if(!val) return;
+            const term = document.getElementById('terminal-body');
+            term.innerHTML += `<p class="text-purple-400">[AI Copilot] 正在智能识别分析依赖网关系特征...</p>`;
+            setTimeout(() => {
+                term.innerHTML += `<p class="text-green-400">[AI Copilot] 成功解析：自动引入并重装基础核心微服务链路节点关系。</p>`;
+            }, 800);
+        }
+
+        function loadTemplate(name) {
+            alert(`已动态成功拉取并还原配置模板: ${name}`);
+        }
+
+        function resetDag() {
+            const container = document.getElementById('dag-container');
+            alert('重置画布成功');
+        }
+
+        function startGlobalPipeline() {
+            const btn = document.getElementById('deploy-master-btn');
+            const icon = document.getElementById('master-icon');
+            const text = document.getElementById('master-text');
+            const term = document.getElementById('terminal-body');
+            const footerStatus = document.getElementById('footer-status');
+
+            // 联动改动第一个节点状态
+            const tag1 = document.getElementById('status-tag-1');
+            const tag2 = document.getElementById('status-tag-2');
+
+            btn.disabled = true;
+            btn.className = "w-full py-3 bg-gray-700 text-white text-xs font-bold rounded-xl flex items-center justify-center space-x-2 pointer-events-none";
+            icon.className = "fas fa-circle-notch animate-spin text-orange-400";
+            text.innerText = "流水线集群分布式并行编译中...";
+            footerStatus.innerText = "全量构建中 (45%)";
+            footerStatus.className = "ml-1 text-orange-400";
+
+            tag1.className = "text-[10px] bg-amber-50 text-amber-600 border border-amber-200 font-medium px-2 py-0.5 rounded-md flex items-center";
+            tag1.innerHTML = `<i class="fas fa-circle-notch animate-spin mr-1.5"></i>编译中 (45%)`;
+
+            term.innerHTML += `
+                <p class="text-orange-400">[DAG Pipeline] 开始并行处理部署单元 1: mdf-biz</p>
+                <p class="text-gray-400">$ yarn run build:backend --env=production</p>
+                <p class="text-gray-300">✔ Optimization asset modules injection completed.</p>
+            `;
+
+            // 异步改变状态
+            setTimeout(() => {
+                tag1.className = "text-[10px] bg-green-50 text-green-600 border border-green-200 font-medium px-2 py-0.5 rounded-md flex items-center";
+                tag1.innerHTML = `<i class="fas fa-check-circle mr-1.5"></i>构建成功`;
+                
+                tag2.className = "text-[10px] bg-amber-50 text-amber-600 border border-amber-200 font-medium px-2 py-0.5 rounded-md flex items-center";
+                tag2.innerHTML = `<i class="fas fa-circle-notch animate-spin mr-1.5"></i>构建中 (80%)`;
+
+                term.innerHTML += `
+                    <p class="text-green-400">[DAG Pipeline] 🟢 mdf-biz 构建成功。正在触发下游阻塞释放 $\rightarrow$ saas-cc-web-metapage</p>
+                    <p class="text-gray-400">$ vite build --base=/metapage/</p>
+                `;
+            }, 2500);
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal-body').innerHTML = '<p class="text-gray-600">[Terminal output cleared]</p>';
+        }
+
+        function addNewNode() {
+            alert('已成功呼出拓扑节点树，可以选择绑定本地注册的微服务进行 DAG 联级连线。');
+        }
+    </script>
+</body>
+</html>
