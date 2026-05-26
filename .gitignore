@@ -10,3 +10,4 @@ coverage/
 !.env.example
 .deploy-api-port
 .deploy-pipeline-stats.json
+data/mail-digest/

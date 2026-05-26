@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "subscriptions": [
+    {
+      "id": "jira-notify",
+      "name": "Jira 通知",
+      "fromContains": ["jira@chanjet.com", "jira"],
+      "subjectContains": [],
+      "mailbox": "INBOX"
+    }
+  ]
+}

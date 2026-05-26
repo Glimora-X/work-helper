@@ -4,7 +4,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
@@ -28,6 +27,13 @@ import {
   FLOAT_DEPLOY_SESSION_KEY,
   type FloatDeployConfirmedPayload,
 } from '../lib/float-command/float-deploy-payload';
+import {
+  layoutDeployDagPositions,
+  linksMatchTemplate,
+  resolveDeployLinks,
+  validateDeployGraph,
+  type DeployGraphLink,
+} from '../lib/deploy-dag';
 
 type NodeStatus = 'idle' | 'running' | 'success' | 'failed' | 'queued';
 type Phase = 'idle' | 'draft' | 'executing' | 'completed';
@@ -69,6 +75,8 @@ interface Template {
   id: string;
   name: string;
   nodes: string[];
+  /** 依赖边；缺省为 nodes 顺序串行 */
+  links?: DeployGraphLink[];
   /** 浮标 / 指令匹配用别名 */
   keywords?: string[];
 }
@@ -91,9 +99,23 @@ const INITIAL_TEMPLATES: Template[] = [
   { id: 'tpl_9', name: 'MDF', nodes: ['mdf', 'saas-cc-web-metapage'], keywords: ['mdf', '低代码', 'metapage'] },
   { id: 'tpl_8', name: 'MDF—BIZ', nodes: ['mdf-biz', 'saas-cc-web-metapage'], keywords: ['biz', 'mdf-biz'] },
   { id: 'tpl_7', name: 'UI-WEB', nodes: ['mdf-ui-web', 'saas-cc-web-metapage'], keywords: ['ui-web', 'ui web'] },
-  { id: 'tpl_11', name: 'BIZ-CORE', nodes: ['biz-core', 'saas-cc-web', 'hsy-h5-mainapp'], keywords: ['biz-core', '订单', 'biz core'] },
+  { id: 'tpl_11', name: 'BIZ-CORE', nodes: ['biz-core', 'saas-cc-web', 'hsy-h5-mainapp'], links: [
+    { source: 'biz-core', target: 'saas-cc-web' },
+    { source: 'biz-core', target: 'hsy-h5-mainapp' },
+  ], keywords: ['biz-core', '订单', 'biz core'] },
   {
-    id: 'tpl_12',
+    id: 'tpl_13',
+    name: 'MDF-全量',
+    nodes: ['mdf', 'mdf-biz', 'mdf-ui-web', 'saas-cc-web-metapage'],
+    links: [
+      { source: 'mdf', target: 'saas-cc-web-metapage' },
+      { source: 'mdf-biz', target: 'saas-cc-web-metapage' },
+      { source: 'mdf-ui-web', target: 'saas-cc-web-metapage' },
+    ],
+    keywords: ['mdf全量', 'mdf 并行', '低代码全量', 'metapage'],
+  },
+  {
+    id: 'tpl_14',
     name: 'SAAS-CC-NODE-METASERVER',
     nodes: ['saas-cc-node-metaserver', 'saas-cc-node'],
     keywords: ['node', 'metaserver', 'cc-node'],
@@ -105,6 +127,22 @@ const DEPLOY_API_BASE =
   '/api/deploy';
 
 const DEPLOY_PIPELINE_RUN_KEY = 'deploy_pipeline_active_run_v1';
+
+/** 合并本地已存模板与内置种子：补 links，并追加种子中新增的模板 */
+function mergeSavedTemplatesWithSeed(saved: Template[], seed: Template[]): Template[] {
+  const savedIds = new Set(saved.map((tpl) => tpl.id));
+  const merged = saved.map((tpl) => {
+    const base = seed.find((item) => item.id === tpl.id);
+    if (!base) return tpl;
+    return {
+      ...tpl,
+      links: tpl.links ?? base.links,
+      keywords: tpl.keywords?.length ? tpl.keywords : base.keywords,
+    };
+  });
+  const missing = seed.filter((item) => !savedIds.has(item.id));
+  return [...merged, ...missing];
+}
 
 // Custom Node Component for React Flow
 function DeployNodeCard({ data }: { data: DeployNodeData }) {
@@ -150,8 +188,8 @@ function DeployNodeCard({ data }: { data: DeployNodeData }) {
   );
 }
 
-// DAG Validation - Check for cycles
-const validateDag = (nodes: DeployNode[], edges: DeployEdge[]): { valid: boolean; error?: string } => {
+// DAG Validation - Check for cycles (React Flow node ids)
+const validateFlowDag = (nodes: DeployNode[], edges: DeployEdge[]): { valid: boolean; error?: string } => {
   const adjList = new Map<string, string[]>();
   nodes.forEach(n => adjList.set(n.id, []));
   edges.forEach(e => adjList.get(e.source)?.push(e.target));
@@ -183,77 +221,47 @@ const validateDag = (nodes: DeployNode[], edges: DeployEdge[]): { valid: boolean
   return { valid: true };
 };
 
-// Topological Sort for execution order
-const topologicalSort = (nodes: DeployNode[], edges: DeployEdge[]): string[] => {
-  const inDegree = new Map<string, number>();
-  const adjList = new Map<string, string[]>();
-  
-  nodes.forEach(n => {
-    inDegree.set(n.id, 0);
-    adjList.set(n.id, []);
-  });
-  
-  edges.forEach(e => {
-    adjList.get(e.source)?.push(e.target);
-    inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
-  });
-  
-  const queue: string[] = [];
-  inDegree.forEach((degree, nodeId) => {
-    if (degree === 0) queue.push(nodeId);
-  });
-  
-  const result: string[] = [];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    result.push(current);
-    
-    for (const neighbor of adjList.get(current) || []) {
-      inDegree.set(neighbor, inDegree.get(neighbor)! - 1);
-      if (inDegree.get(neighbor) === 0) {
-        queue.push(neighbor);
-      }
-    }
-  }
-  
-  return result;
-};
+// Create DAG from node names + optional dependency links (fork/join supported)
+const createDagFromGraph = (
+  nodeNames: string[],
+  links?: DeployGraphLink[]
+): { nodes: DeployNode[]; edges: DeployEdge[] } => {
+  const graphLinks = resolveDeployLinks(nodeNames, links);
+  const positions = layoutDeployDagPositions(nodeNames, graphLinks);
+  const ts = Date.now();
+  const nameToId = new Map<string, string>();
 
-// Create DAG from node names (vertical layout, center-aligned)
-const createDagFromNodes = (nodeNames: string[]): { nodes: DeployNode[]; edges: DeployEdge[] } => {
-  const nodes: DeployNode[] = [];
-  const edges: DeployEdge[] = [];
-  
-  // Center X position (canvas is roughly 800px wide, node is ~200px)
-  const centerX = 300;
-  
   nodeNames.forEach((name, index) => {
-    const nodeId = `node-${index}-${Date.now()}`;
-    nodes.push({
-      id: nodeId,
-      type: 'deploy',
-      position: { x: centerX, y: index * 150 },
-      data: { name, status: 'idle' as NodeStatus },
-    });
-    
-    if (index > 0) {
-      edges.push({
-        id: `edge-${index - 1}-${index}`,
-        source: `node-${index - 1}-${Date.now()}`,
-        target: nodeId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        animated: true,
-      });
-    }
+    nameToId.set(name, `node-${index}-${ts}`);
   });
-  
-  // Fix edge sources to use correct node IDs
-  edges.forEach((edge, idx) => {
-    edge.source = nodes[idx].id;
-  });
-  
+
+  const nodes: DeployNode[] = nodeNames.map((name) => ({
+    id: nameToId.get(name)!,
+    type: 'deploy',
+    position: positions.get(name) ?? { x: 300, y: 0 },
+    data: { name, status: 'idle' as NodeStatus },
+  }));
+
+  const edges: DeployEdge[] = graphLinks.map((link, idx) => ({
+    id: `edge-${idx}-${ts}`,
+    source: nameToId.get(link.source)!,
+    target: nameToId.get(link.target)!,
+    markerEnd: { type: MarkerType.ArrowClosed },
+    animated: true,
+  }));
+
   return { nodes, edges };
 };
+
+function linksFromFlow(nodes: DeployNode[], edges: DeployEdge[]): DeployGraphLink[] {
+  return edges
+    .map((edge) => {
+      const source = nodes.find((n) => n.id === edge.source)?.data.name;
+      const target = nodes.find((n) => n.id === edge.target)?.data.name;
+      return source && target ? { source, target } : null;
+    })
+    .filter(Boolean) as DeployGraphLink[];
+}
 
 export default function Deployment() {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -315,7 +323,9 @@ export default function Deployment() {
   const [templates, setTemplates] = useState<Template[]>(() => {
     try {
       const saved = localStorage.getItem('deploy_templates_v1');
-      return saved ? JSON.parse(saved) : INITIAL_TEMPLATES;
+      if (!saved) return INITIAL_TEMPLATES;
+      const parsed = JSON.parse(saved) as Template[];
+      return mergeSavedTemplatesWithSeed(parsed, INITIAL_TEMPLATES);
     } catch (e) {
       return INITIAL_TEMPLATES;
     }
@@ -335,12 +345,32 @@ export default function Deployment() {
   const [favoritedIds, setFavoritedIds] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('deploy_favorites_v1') || '[]'); } catch { return []; }
   });
+  const [pipelineTitle, setPipelineTitle] = useState<string | null>(null);
 
   // Node Management State
   const [isAddingNode, setIsAddingNode] = useState(false);
   const [newNodeName, setNewNodeName] = useState('');
   const deployProjects = health?.projects || [];
   const projectLabel = (id: string) => deployProjects.find((project) => project.id === id)?.label || id;
+
+  const resolvePipelineTitle = useCallback(
+    (nodeNames: string[], tplId?: string): string => {
+      if (tplId) {
+        const tpl = templates.find((t) => t.id === tplId);
+        if (tpl) return tpl.name;
+      }
+      if (nodeNames.length === 0) return '空白链路';
+      if (nodeNames.length === 1) return projectLabel(nodeNames[0]);
+      const matchedTpl = templates.find((t) => {
+        const nodeSet = new Set(nodeNames);
+        const tplSet = new Set(t.nodes);
+        return nodeSet.size === tplSet.size && [...nodeSet].every((n) => tplSet.has(n));
+      });
+      if (matchedTpl) return matchedTpl.name;
+      return nodeNames.map(projectLabel).join(' → ');
+    },
+    [templates, deployProjects]
+  );
 
   const [taskStats, setTaskStats] = useState<Array<{ taskKey: string; count: number; lastRunAt: string }>>([]);
   const pipelineEsRef = useRef<EventSource | null>(null);
@@ -400,8 +430,8 @@ export default function Deployment() {
               data: { name: n.name, status: n.status },
             }));
             setPipeline(flowNodes);
-            const running = rawNodes.find((n) => n.status === 'running');
-            setActiveTask(running?.name ?? null);
+            const running = rawNodes.filter((n) => n.status === 'running');
+            setActiveTask(running.length ? running.map((n) => n.name).join(' / ') : null);
             return;
           }
           if (event.type === 'completed' || event.type === 'failed') {
@@ -433,7 +463,13 @@ export default function Deployment() {
       nodes?: DeployNode[];
       events?: Array<{ type: string; timestamp: string; payload?: { message?: string; level?: string } }>;
     }) => {
-      if (snap.nodes?.length) setPipeline(snap.nodes);
+      if (snap.nodes?.length) {
+        setPipeline(snap.nodes);
+        const nodeNames = snap.nodes
+          .map((n) => (typeof n.data?.name === 'string' ? n.data.name : undefined))
+          .filter(Boolean) as string[];
+        if (nodeNames.length) setPipelineTitle(resolvePipelineTitle(nodeNames));
+      }
       const logEvents = (snap.events || []).filter((e) => e.type === 'log');
       const restored: LogEntry[] = logEvents.map((e, idx) => ({
         id: 1_000_000_000 + idx,
@@ -485,7 +521,7 @@ export default function Deployment() {
       cancelled = true;
       closePipelineEventSource();
     };
-  }, [attachPipelineEventSource, closePipelineEventSource, fetchTaskStats]);
+  }, [attachPipelineEventSource, closePipelineEventSource, fetchTaskStats, resolvePipelineTitle]);
 
   // Auto scroll terminal logs
   useEffect(() => {
@@ -533,7 +569,12 @@ export default function Deployment() {
         data: { name, status: 'idle' as NodeStatus },
       }))
     );
-  }, []);
+    setPipelineTitle(
+      typeof p.templateId === 'string' && p.templateId
+        ? resolvePipelineTitle(ids, p.templateId)
+        : resolvePipelineTitle(ids)
+    );
+  }, [resolvePipelineTitle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -577,6 +618,7 @@ export default function Deployment() {
     const cmd = command.trim();
     setIsResolving(true);
     setPhase('idle');
+    setPipelineTitle(null);
     setParsedJira(null);
     setParsedBranch(null);
     setLogs([]);
@@ -591,6 +633,8 @@ export default function Deployment() {
     setParsedBranch(detectedBranch);
 
     let resolvedNodes: string[] = [];
+    let resolvedTitle: string | undefined;
+    let resolvedLinks: DeployGraphLink[] | undefined;
     if (cmd.includes('然后') || cmd.includes('再')) {
       resolvedNodes = ['auth-service', 'biz-core', 'cc-web'];
       addLog(`[NLP] Defined cascading sequence from natural language.`, 'info');
@@ -625,6 +669,8 @@ export default function Deployment() {
       const tmplRes = resolveDeployTemplates(cmd, templates, recentMerged);
       if (tmplRes.type === 'exact') {
         resolvedNodes = tmplRes.template.nodes;
+        resolvedTitle = tmplRes.template.name;
+        resolvedLinks = tmplRes.template.links;
         addLog(
           `[Template] 匹配: ${tmplRes.template.name}（可信度 ${tmplRes.confidence}）→ ${resolvedNodes.join(', ')}`,
           'info'
@@ -632,6 +678,8 @@ export default function Deployment() {
       } else if (tmplRes.type === 'multiple') {
         const pick = tmplRes.candidates[0];
         resolvedNodes = pick.nodes;
+        resolvedTitle = pick.name;
+        resolvedLinks = pick.links;
         addLog(
           `[Template] 多条命中，已按最近使用优先选用: ${pick.name}（共 ${tmplRes.candidates.length} 条，可从左侧模板切换）`,
           'warn'
@@ -647,18 +695,20 @@ export default function Deployment() {
       addLog(`[Git] Explicit branch target override: ${detectedBranch}`, 'info');
     }
 
-    const dag = createDagFromNodes(resolvedNodes);
+    const dag = createDagFromGraph(resolvedNodes, resolvedLinks);
     setNodes(dag.nodes);
     setEdges(dag.edges);
+    setPipelineTitle(resolvedTitle ?? resolvePipelineTitle(resolvedNodes));
     setIsResolving(false);
     setPhase('draft');
     addLog(`Pipeline Draft created. Awaiting user confirmation.`, 'prompt');
   };
 
   // --- Template Interactions ---
-  const applyTemplate = (nodeNames: string[], tplId?: string) => {
-    void tplId; // tplId reserved, recent tracking happens on actual execution
-    const dag = createDagFromNodes(nodeNames);
+  const applyTemplate = (nodeNames: string[], tplId?: string, links?: DeployGraphLink[]) => {
+    const tpl = tplId ? templates.find((t) => t.id === tplId) : undefined;
+    setPipelineTitle(resolvePipelineTitle(nodeNames, tplId));
+    const dag = createDagFromGraph(nodeNames, links ?? tpl?.links);
     setNodes(dag.nodes);
     setEdges(dag.edges);
     setPhase('draft');
@@ -686,7 +736,11 @@ export default function Deployment() {
     const newTpl: Template = {
       id: 'tpl_' + Date.now(),
       name: newTemplateName.trim(),
-      nodes: pipeline.map(n => n.name)
+      nodes: pipeline.map(n => n.name),
+      links: (() => {
+        const savedLinks = linksFromFlow(pipeline, edges);
+        return savedLinks.length ? savedLinks : undefined;
+      })(),
     };
     setTemplates(prev => [...prev, newTpl]);
     setIsSavingTemplate(false);
@@ -718,9 +772,20 @@ export default function Deployment() {
     if (nodes.length === 0) return;
     
     // Validate DAG structure
-    const validation = validateDag(nodes, edges);
-    if (!validation.valid) {
-      addLog(`[DAG] ${validation.error}`, 'error');
+    const flowValidation = validateFlowDag(nodes, edges);
+    if (!flowValidation.valid) {
+      addLog(`[DAG] ${flowValidation.error}`, 'error');
+      return;
+    }
+
+    const dagNodeNames = nodes.map((n) => n.data.name);
+    const dagLinks = linksFromFlow(nodes, edges);
+    const graphValidation = validateDeployGraph(
+      dagNodeNames,
+      resolveDeployLinks(dagNodeNames, dagLinks)
+    );
+    if (!graphValidation.valid) {
+      addLog(`[DAG] ${graphValidation.error}`, 'error');
       return;
     }
     
@@ -732,15 +797,9 @@ export default function Deployment() {
       return;
     }
 
-    // Extract linear execution order from DAG (topological sort)
-    const executionOrder = topologicalSort(nodes, edges);
-    const projectIds = executionOrder.map(nodeId => {
-      const node = nodes.find(n => n.id === nodeId);
-      return node?.data.name;
-    }).filter(Boolean) as string[];
-
-    const nodeKey = projectIds.join(',');
-    const matchedTpl = templates.find((t) => t.nodes.join(',') === nodeKey);
+    const matchedTpl = templates.find((t) =>
+      linksMatchTemplate(dagNodeNames, t.nodes, t.links, dagLinks)
+    );
     if (matchedTpl) {
       setRecentIds((prev) => {
         const next = [matchedTpl.id, ...prev.filter((id) => id !== matchedTpl.id)].slice(0, 5);
@@ -759,7 +818,10 @@ export default function Deployment() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectIds,
+          dag: {
+            nodes: dagNodeNames,
+            links: dagLinks.length ? dagLinks : undefined,
+          },
           jiraId: parsedJira || undefined,
           branch: parsedBranch || undefined,
         }),
@@ -943,7 +1005,7 @@ export default function Deployment() {
           <div className="w-52 shrink-0 pkmer-card flex flex-col overflow-hidden">
 
             {/* ⭐ 最近使用 */}
-            <div className="px-3 pt-2.5 pb-1.5">
+            {/* <div className="px-3 pt-2.5 pb-1.5">
               <p className="text-[9px] font-semibold pkmer-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
                 <span>⭐</span> 最近使用
               </p>
@@ -954,7 +1016,7 @@ export default function Deployment() {
                   {recentTemplates.map(tpl => (
                     <button
                       key={tpl.id}
-                      onClick={() => applyTemplate(tpl.nodes, tpl.id)}
+                      onClick={() => applyTemplate(tpl.nodes, tpl.id, tpl.links)}
                       className="px-2 py-0.5 rounded-full bg-[color:color-mix(in_srgb,var(--color-canvas)_70%,var(--color-shell-bg))] hover:bg-[color:color-mix(in_srgb,var(--color-canvas)_85%,var(--color-shell-bg))] text-[10px] pkmer-text-secondary truncate max-w-full transition-colors"
                     >
                       {tpl.name}
@@ -964,10 +1026,10 @@ export default function Deployment() {
               )}
             </div>
 
-            <div className="mx-3 border-t border-[color:var(--color-hairline)]" />
+            <div className="mx-3 border-t border-[color:var(--color-hairline)]" /> */}
 
             {/* 常用链路（服务端按执行次数统计） */}
-            <div className="px-3 pt-2 pb-1.5">
+            {/* <div className="px-3 pt-2 pb-1.5">
               <p className="text-[9px] font-semibold pkmer-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
                 <BarChart2 className="w-3 h-3 shrink-0" />常用链路
               </p>
@@ -1000,10 +1062,10 @@ export default function Deployment() {
               )}
             </div>
 
-            <div className="mx-3 border-t border-[color:var(--color-hairline)]" />
+            <div className="mx-3 border-t border-[color:var(--color-hairline)]" /> */}
 
             {/* 📌 收藏 */}
-            <div className="px-3 pt-1.5 pb-1.5">
+            {/* <div className="px-3 pt-1.5 pb-1.5">
               <p className="text-[9px] font-semibold pkmer-text-muted uppercase tracking-widest mb-1 flex items-center gap-1">
                 <span>📌</span> 收藏
               </p>
@@ -1014,7 +1076,7 @@ export default function Deployment() {
                   {favoritedTemplates.map(tpl => (
                     <button
                       key={tpl.id}
-                      onClick={() => applyTemplate(tpl.nodes, tpl.id)}
+                      onClick={() => applyTemplate(tpl.nodes, tpl.id, tpl.links)}
                       className="px-2 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 text-[10px] text-amber-700 border border-amber-200 truncate max-w-full transition-colors"
                     >
                       {tpl.name}
@@ -1024,7 +1086,7 @@ export default function Deployment() {
               )}
             </div>
 
-            <div className="mx-3 border-t border-[color:var(--color-hairline)]" />
+            <div className="mx-3 border-t border-[color:var(--color-hairline)]" /> */}
 
             {/* Tab: 工程 | 模板 */}
             <div className="px-3 pt-2 shrink-0">
@@ -1065,6 +1127,7 @@ export default function Deployment() {
                       sessionStorage.removeItem(DEPLOY_PIPELINE_RUN_KEY);
                       setPhase('draft');
                       setPipeline([]);
+                      setPipelineTitle('空白链路');
                       setLogs([]);
                       setIsSavingTemplate(false);
                     }}
@@ -1078,7 +1141,7 @@ export default function Deployment() {
                     <div
                       key={tpl.id}
                       className="group flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[color:var(--color-surface-hover)] cursor-pointer transition-colors"
-                      onClick={() => applyTemplate(tpl.nodes, tpl.id)}
+                      onClick={() => applyTemplate(tpl.nodes, tpl.id, tpl.links)}
                     >
                       <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
                         <span className="text-[11px] pkmer-text-body truncate">{tpl.name}</span>
@@ -1106,10 +1169,15 @@ export default function Deployment() {
           </div>
 
           {/* ── MIDDLE: DAG Editor with React Flow ── */}
-          <div className="flex-1 flex flex-col overflow-hidden pkmer-card mr-3">
+          <div className="flex-[1.25] min-w-0 flex flex-col overflow-hidden pkmer-card">
             {/* DAG toolbar */}
             <div className="shrink-0 h-12 flex items-center px-4 gap-3" style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <span className="text-xs font-semibold pkmer-text-muted uppercase tracking-widest">DAG 依赖编排</span>
+              <span
+                className="text-sm font-semibold pkmer-text-body truncate max-w-[min(100%,480px)]"
+                title={pipelineTitle ?? undefined}
+              >
+                {pipelineTitle ?? 'DAG 依赖编排'}
+              </span>
               {(parsedJira || parsedBranch) && (
                 <div className="flex items-center gap-2">
                   {parsedJira && (
@@ -1149,7 +1217,7 @@ export default function Deployment() {
                     </button>
                   )}
                   <div className="h-3 w-px bg-[color:var(--color-hairline)]" />
-                  <button type="button" onClick={() => setPhase('idle')} className="text-xs pkmer-text-muted hover:text-[color:var(--color-ink)]">
+                  <button type="button" onClick={() => { setPhase('idle'); setPipelineTitle(null); }} className="text-xs pkmer-text-muted hover:text-[color:var(--color-ink)]">
                     重新选用
                   </button>
                 </div>
@@ -1157,7 +1225,7 @@ export default function Deployment() {
             </div>
 
             {/* React Flow Canvas */}
-            <div className="flex-1" style={{ background: 'var(--bg-secondary)' }}>
+            <div className="flex-1 min-h-0 h-full" style={{ background: 'var(--bg-secondary)' }}>
               {phase === 'idle' && (
                 <div className="flex flex-col items-center justify-center h-full text-center px-6">
                   <Box className="w-8 h-8 mb-3 pkmer-text-muted opacity-40" />
@@ -1168,6 +1236,7 @@ export default function Deployment() {
 
               {(phase === 'draft' || phase === 'executing' || phase === 'completed') && (
                 <ReactFlow
+                  className="h-full w-full"
                   nodes={nodes}
                   edges={edges}
                   onNodesChange={onNodesChange}
@@ -1175,13 +1244,13 @@ export default function Deployment() {
                   onConnect={onConnect}
                   nodeTypes={{ deploy: DeployNodeCard }}
                   defaultNodeOptions={{ type: 'deploy' }}
+                  proOptions={{ hideAttribution: true }}
                   fitView
                   minZoom={0.5}
                   maxZoom={2}
                 >
                   <Background color="var(--color-hairline)" gap={16} size={1} />
                   <Controls />
-                  <MiniMap />
                 </ReactFlow>
               )}
             </div>
@@ -1207,6 +1276,7 @@ export default function Deployment() {
                     setPhase('idle');
                     setNodes([]);
                     setEdges([]);
+                    setPipelineTitle(null);
                     setLogs([]);
                     setCommand('');
                   }}
@@ -1219,7 +1289,7 @@ export default function Deployment() {
           </div>
 
           {/* ── RIGHT: Log Output + Execution Status ── */}
-          <div className="w-[500px] shrink-0 pkmer-terminal">
+          <div className="w-[400px] shrink-0 pkmer-terminal">
             <div className="pkmer-terminal__chrome rounded-t-xl">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-[#FF5F56]" />

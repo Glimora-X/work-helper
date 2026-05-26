@@ -5,6 +5,7 @@ import {
   weekJqlDateRange,
   jqlMyOpenIssues,
   jqlMyIssuesTouchedInWeek,
+  jqlMyIssuesAssignedCreatedInWeek,
   buildWeeklySummaryMarkdown,
 } from '../../server/jira-weekly';
 import type { JiraSearchIssue } from '../../server/jira-rest';
@@ -33,6 +34,17 @@ test('weekJqlDateRange returns bracket-safe JQL dates', () => {
   const jql = jqlMyIssuesTouchedInWeek(r.fromYmd, r.toYmdExclusive);
   assert.ok(jql.includes('2026-05-04'));
   assert.ok(jql.includes('2026-05-11'));
+});
+
+test('jqlMyIssuesAssignedCreatedInWeek filters assignee and created in week', () => {
+  const wed = new Date(2026, 4, 7);
+  const r = weekJqlDateRange(0, wed);
+  const jql = jqlMyIssuesAssignedCreatedInWeek(r.fromYmd, r.toYmdExclusive);
+  assert.ok(jql.includes('assignee in (currentUser())'));
+  assert.ok(jql.includes('created >='));
+  assert.ok(jql.includes('2026-05-04'));
+  assert.ok(jql.includes('2026-05-11'));
+  assert.ok(jql.includes('ORDER BY created DESC'));
 });
 
 test('buildWeeklySummaryMarkdown handles empty issues', () => {

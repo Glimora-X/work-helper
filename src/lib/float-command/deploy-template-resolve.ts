@@ -5,6 +5,7 @@ export interface DeployTemplateLike {
   id: string;
   name: string;
   nodes: string[];
+  links?: Array<{ source: string; target: string }>;
   keywords?: string[];
 }
 

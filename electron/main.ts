@@ -2,8 +2,10 @@ import {app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, utilityProcess
 import type {UtilityProcess} from 'electron';
 import http from 'node:http';
 import net from 'node:net';
+import os from 'node:os';
 import {execSync} from 'node:child_process';
 import path from 'node:path';
+import {attachDesktopShellProxy} from './desktop-shell-proxy';
 
 /** `~/Library/Application Support/<此名>`；package.json 的 name 为 react-example，不设则目录会变成 react-example */
 app.name = 'Dottie-Assistant';
@@ -206,9 +208,16 @@ async function startBundledApi(): Promise<void> {
 
     // utilityProcess.fork 在打包后无需 RunAsNode fuse，是 Electron 22+ 推荐的子进程方案
     const assistantDotenvPath = path.join(app.getPath('userData'), '.env');
+    const homeDir = process.env.HOME || os.homedir();
+    const defaultPath =
+      '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
     const child = utilityProcess.fork(path.resolve(apiScript), [], {
       env: {
         ...process.env,
+        HOME: process.env.HOME || homeDir,
+        USER: process.env.USER || os.userInfo().username,
+        SHELL: process.env.SHELL || '/bin/bash',
+        PATH: process.env.PATH || defaultPath,
         NODE_OPTIONS: '',
         SERVE_SPA_ROOT: path.resolve(spaRoot),
         DEPLOY_PROJECT_CONFIG_PATH: path.resolve(configPath),
@@ -220,6 +229,7 @@ async function startBundledApi(): Promise<void> {
       stdio: 'pipe',
     });
     apiChild = child;
+    attachDesktopShellProxy(child);
 
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrBuf += chunk.toString();

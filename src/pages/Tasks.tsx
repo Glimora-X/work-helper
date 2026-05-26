@@ -12,9 +12,14 @@ import {type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo,
 import PageHeader from '../components/PageHeader';
 import {deployApiUrl} from '../lib/deploy-api-url';
 import {
+  appendJiraIssuesToToday,
+  carryYesterdayIncompleteToToday,
   DAILY_TODOS_STORAGE_KEY,
   DEFAULT_FRIDAY_WEEKLY_REPORT_TEXT,
+  hasAutogenRunForDate,
   loadDailyTodos,
+  markAutogenRunForDate,
+  shiftISODate,
   todayISODate,
   type DailyTodoItem,
 } from '../lib/daily-todos-storage';
@@ -23,15 +28,6 @@ import {
 const FONT_BODY = 'var(--font-body), "Noto Sans SC", "PingFang SC", sans-serif';
 
 type TodoItem = DailyTodoItem;
-
-function shiftISODate(iso: string, deltaDays: number): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dt = new Date(y, m - 1, d + deltaDays);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
 
 function formatDateHeading(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -153,6 +149,48 @@ export default function Tasks() {
     setStore(normalized);
     setHydrated(true);
   }, []);
+
+  /** 每日一次：昨日未完成结转 + 本周指派且创建的 Jira 工单 */
+  useEffect(() => {
+    if (!hydrated) return;
+    const today = todayISODate();
+    if (hasAutogenRunForDate(today)) return;
+
+    let cancelled = false;
+
+    (async () => {
+      carryYesterdayIncompleteToToday();
+      try {
+        const r = await fetch(deployApiUrl('jira', '/my-created-week'));
+        if (!cancelled && r.ok) {
+          const j = (await r.json()) as {
+            issues?: {key: string; fields?: {summary?: string}}[];
+          };
+          const issues = j.issues ?? [];
+          appendJiraIssuesToToday(
+            issues.map((row) => ({
+              key: row.key,
+              summary: row.fields?.summary,
+            })),
+          );
+        }
+      } catch {
+        /* Jira 未配置或网络失败时仅结转昨日 */
+      }
+      if (cancelled) return;
+      markAutogenRunForDate(today);
+      const raw = loadDailyTodos();
+      const normalized: Record<string, TodoItem[]> = {};
+      for (const [k, list] of Object.entries(raw)) {
+        if (Array.isArray(list) && list.length > 0) normalized[k] = todosDoneLast(list);
+      }
+      setStore(normalized);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated]);
 
   /** 周五当天若没有「写周报」则自动补一条（切换回该周五时会再次检查） */
   useEffect(() => {

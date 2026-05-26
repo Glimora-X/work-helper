@@ -64,20 +64,33 @@ export function jqlMyIssuesTouchedInWeek(fromYmd: string, toYmdExclusive: string
   );
 }
 
+/** 指派给我且本周创建的工单（自然周，按 created 倒序） */
+export function jqlMyIssuesAssignedCreatedInWeek(fromYmd: string, toYmdExclusive: string): string {
+  return (
+    `assignee in (currentUser()) AND created >= "${fromYmd}" AND created < "${toYmdExclusive}" ` +
+    'ORDER BY created DESC'
+  );
+}
+
 export function buildWeeklySummaryMarkdown(
   issues: JiraSearchIssue[],
   rangeLabelZh: string
 ): string {
   const lines: string[] = [];
-  lines.push(`# 工作周报（Jira）`);
+  lines.push(`# 工作周报`);
   lines.push('');
   lines.push(`**统计周期**：${rangeLabelZh}`);
+  lines.push('');
+  lines.push(`## Jira 工单（本周有更新）`);
   lines.push('');
   lines.push(`本周在 Jira 中「指派给你」且发生更新的工单共 **${issues.length}** 条（含状态流转、评论、字段修改等触发的 updated）。`);
   lines.push('');
 
   if (issues.length === 0) {
-    lines.push('本周暂无符合条件的工单。');
+    lines.push('本周暂无符合条件的 Jira 工单。');
+    lines.push('');
+    lines.push('---');
+    lines.push('*以上内容由Dottie-Assistant根据 Jira 数据自动生成，可按需润色后发送。*');
     return lines.join('\n');
   }
 

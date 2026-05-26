@@ -5,6 +5,7 @@ import { resolveIssueToJobPaths } from './jira-resolve';
 import { resolveJiraAuth, jiraSearch, jiraSubmitTestTransition } from './jira-rest';
 import {
   buildWeeklySummaryMarkdown,
+  jqlMyIssuesAssignedCreatedInWeek,
   jqlMyIssuesTouchedInWeek,
   jqlMyOpenIssues,
   weekJqlDateRange,
@@ -25,6 +26,7 @@ import {
   getPipelineTaskStatsSorted,
   startDeployPipelineRun,
 } from './deploy-pipeline';
+import type { DeployGraphLink } from '../src/lib/deploy-dag.ts';
 import { scanLocalSkills } from './local-skills';
 import { scanLocalMcp } from './local-mcp';
 import { scanLocalModels } from './local-models';
@@ -42,6 +44,7 @@ import {
   type ChildProcess,
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process';
+import { childProcessEnv, spawnShellCommand } from './desktop-shell-bridge';
 import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
@@ -61,6 +64,16 @@ import {
   type ProjectCatalogEntry,
   writeEnvFile,
 } from './assistant-workspace-config';
+import { parseDailySchedules, getNextOccurrence, type DailySchedule } from './daily-schedule';
+import { MAIL_ENV_DEFAULTS, getMailImapConfig, maskEmail } from './mail-config';
+import { buildAndStoreMailDigest } from './mail-digest';
+import { readLatestMailDigest } from './mail-digest-store';
+import { testMailImapConnection } from './mail-imap';
+import {
+  loadMailSubscriptions,
+  saveMailSubscriptions,
+  validateMailSubscriptionsFile,
+} from './mail-subscriptions';
 
 const envPath = resolveDeployApiDotenvPath();
 if (envPath) {
@@ -113,15 +126,10 @@ interface AutomationRun {
   waiter?: (solution: string) => void;
 }
 
-interface DailySchedule {
-  hour: number;
-  minute: number;
-  label: string;
-}
-
 const runs = new Map<string, AutomationRun>();
 const activeRunsByTask = new Map<AutomationTaskId, string>();
 let taskT1Timer: NodeJS.Timeout | undefined;
+let mailDigestTimer: NodeJS.Timeout | undefined;
 
 // --- Startup Launch ---
 
@@ -239,12 +247,11 @@ function attachDevStreamToRun(
       `[${label}] 流式输出: ${effectiveCmd}（登录 shell；无 stdin/TTY；需「按领域」交互时请开 openDevInTerminal 或改用非交互参数）`,
       'info'
     );
-    const child = spawn(effectiveCmd, {
+    const child = spawnShellCommand({
       cwd,
-      shell: true,
+      command: effectiveCmd,
       detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '0', CI: process.env.CI },
+      env: { ...childProcessEnv(), FORCE_COLOR: '0' },
     }) as ChildProcessWithoutNullStreams;
 
     trackStartupProcess(run, `dev:${label}:${Date.now()}`, child);
@@ -405,11 +412,11 @@ function runStartupShellStep(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     pushStartupLog(run, `[${stepName}] $ ${command}`);
-    const child = spawn(command, {
+    const child = spawnShellCommand({
       cwd,
-      shell: true,
-      detached: true,
-      env: { ...process.env, CI: process.env.CI || 'true' },
+      command,
+      detached: false,
+      env: childProcessEnv(),
     });
     trackStartupProcess(run, `step:${stepName}:${Date.now()}`, child);
 
@@ -466,8 +473,13 @@ async function executeStartupLaunch(
   for (const proj of projects) {
     const expandedPath = expandPath(proj.path);
     pushStartupLog(run, `> $ ${ide} ${proj.path}`, 'info');
-    const ideChild = spawn(ide, [expandedPath], { shell: true, detached: true, stdio: 'ignore' });
-    ideChild.unref();
+    const ideChild = spawnShellCommand({
+      cwd: expandedPath,
+      command: `${ide} ${bashSingleQuote(expandedPath)}`,
+      detached: true,
+      stdio: 'ignore',
+    });
+    ideChild.unref?.();
   }
 
   // Step 2: Git sync（含可选 fast-forward，便于拉取远端 package.json / lockfile 变更）
@@ -624,52 +636,6 @@ function quoteShellArg(input: string): string {
   return `"${input.replace(/(["\\$`])/g, '\\$1')}"`;
 }
 
-function parseDailySchedules(spec: string): DailySchedule[] {
-  const seen = new Set<string>();
-  const parsed: DailySchedule[] = [];
-
-  for (const raw of spec.split(',')) {
-    const value = raw.trim();
-    if (!value) continue;
-    const match = value.match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) {
-      throw new Error(`Invalid daily schedule: ${value}`);
-    }
-    const hour = Number(match[1]);
-    const minute = Number(match[2]);
-    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-      throw new Error(`Invalid daily schedule: ${value}`);
-    }
-    const label = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-    if (seen.has(label)) continue;
-    seen.add(label);
-    parsed.push({ hour, minute, label });
-  }
-
-  parsed.sort((a, b) => a.hour - b.hour || a.minute - b.minute);
-  return parsed;
-}
-
-function getNextOccurrence(from: Date, schedules: DailySchedule[]): { when: Date; schedule: DailySchedule } {
-  let best: { when: Date; schedule: DailySchedule } | null = null;
-
-  for (const schedule of schedules) {
-    const candidate = new Date(from);
-    candidate.setHours(schedule.hour, schedule.minute, 0, 0);
-    if (candidate.getTime() <= from.getTime()) {
-      candidate.setDate(candidate.getDate() + 1);
-    }
-    if (!best || candidate.getTime() < best.when.getTime()) {
-      best = { when: candidate, schedule };
-    }
-  }
-
-  if (!best) {
-    throw new Error('No schedules configured');
-  }
-  return best;
-}
-
 function getConfiguredT1Command(): string {
   if (AUTOMATION_T1_COMMAND.trim()) {
     return AUTOMATION_T1_COMMAND.trim();
@@ -737,13 +703,10 @@ function finishRun(run: AutomationRun) {
 function runShellStep(run: AutomationRun, step: string, cwd: string, command: string): Promise<void> {
   return new Promise((resolve, reject) => {
     pushLog(run, `[${step}] $ ${command}`, 'info');
-    const child = spawn(command, {
+    const child = spawnShellCommand({
       cwd,
-      shell: true,
-      env: {
-        ...process.env,
-        CI: process.env.CI || 'true',
-      },
+      command,
+      env: childProcessEnv(),
     });
 
     const hardErrorPattern = /(error|exception|failed|cannot|not found|eacces|enoent)/i;
@@ -881,6 +844,64 @@ function scheduleTaskT1() {
         }`
       );
     }
+  }, delayMs);
+}
+
+async function runMailDigestScheduled(): Promise<void> {
+  const mailConfig = getMailImapConfig();
+  if (!mailConfig.configured) return;
+  try {
+    await buildAndStoreMailDigest(mailConfig);
+    console.log('[deploy-api] mail digest generated (scheduled)');
+  } catch (error) {
+    console.warn(
+      `[deploy-api] mail digest failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+function scheduleMailDigest() {
+  if (mailDigestTimer) {
+    clearTimeout(mailDigestTimer);
+    mailDigestTimer = undefined;
+  }
+
+  const mailConfig = getMailImapConfig();
+  if (!mailConfig.digestEnabled) {
+    console.log('[deploy-api] mail digest scheduler disabled by MAIL_DIGEST_ENABLED=false');
+    return;
+  }
+  if (!mailConfig.configured) {
+    console.log('[deploy-api] mail digest scheduler not started: MAIL_IMAP credentials missing');
+    return;
+  }
+
+  let schedules;
+  try {
+    schedules = parseDailySchedules(mailConfig.digestSchedule);
+  } catch (error) {
+    console.error(
+      `[deploy-api] mail digest scheduler configuration error: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return;
+  }
+
+  if (schedules.length === 0) {
+    console.warn('[deploy-api] mail digest scheduler not started: no schedule configured');
+    return;
+  }
+
+  const next = getNextOccurrence(new Date(), schedules);
+  const delayMs = Math.max(1000, next.when.getTime() - Date.now());
+  console.log(
+    `[deploy-api] mail digest scheduled for ${next.when.toLocaleString()} (slot ${next.schedule.label})`
+  );
+
+  mailDigestTimer = setTimeout(() => {
+    scheduleMailDigest();
+    void runMailDigestScheduled();
   }, delayMs);
 }
 
@@ -1033,7 +1054,8 @@ app.get('/api/assistant/env-ui', (_req, res) => {
       if (isSecretEnvKey(k)) {
         fields[k] = { kind: 'secret', configured: Boolean(v.trim()) };
       } else {
-        fields[k] = { kind: 'plain', value: v };
+        const plainValue = v || MAIL_ENV_DEFAULTS[k] || '';
+        fields[k] = { kind: 'plain', value: plainValue };
       }
     }
     res.json({
@@ -1086,6 +1108,86 @@ app.post('/api/assistant/env-ui', (req, res) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(500).json({ error: msg });
+  }
+});
+
+app.get('/api/mail/status', (_req, res) => {
+  const mailConfig = getMailImapConfig();
+  res.json({
+    configured: mailConfig.configured,
+    host: mailConfig.host,
+    port: mailConfig.port,
+    user: mailConfig.user ? maskEmail(mailConfig.user) : '',
+    digestEnabled: mailConfig.digestEnabled,
+    digestSchedule: mailConfig.digestSchedule,
+    lookbackHours: mailConfig.lookbackHours,
+  });
+});
+
+app.post('/api/mail/test-connection', async (_req, res) => {
+  const mailConfig = getMailImapConfig();
+  if (!mailConfig.configured) {
+    res.status(503).json({
+      success: false,
+      error: '未配置 MAIL_IMAP_USER / MAIL_IMAP_PASSWORD（阿里邮箱三方客户端安全密码）',
+    });
+    return;
+  }
+  try {
+    await testMailImapConnection(mailConfig);
+    res.json({ success: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(502).json({ success: false, error: msg });
+  }
+});
+
+app.get('/api/mail/digest/latest', (_req, res) => {
+  const latest = readLatestMailDigest();
+  if (!latest) {
+    res.json({ markdown: '', generatedAt: null, stats: null });
+    return;
+  }
+  res.json(latest);
+});
+
+app.post('/api/mail/digest/run', async (_req, res) => {
+  const mailConfig = getMailImapConfig();
+  if (!mailConfig.configured) {
+    res.status(503).json({
+      error: '未配置 MAIL_IMAP_USER / MAIL_IMAP_PASSWORD',
+      markdown: '',
+      generatedAt: null,
+      stats: null,
+    });
+    return;
+  }
+  try {
+    const record = await buildAndStoreMailDigest(mailConfig);
+    res.json(record);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(502).json({ error: msg, markdown: '', generatedAt: null, stats: null });
+  }
+});
+
+app.get('/api/mail/subscriptions', (_req, res) => {
+  try {
+    res.json(loadMailSubscriptions());
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.put('/api/mail/subscriptions', (req, res) => {
+  try {
+    const validated = validateMailSubscriptionsFile(req.body);
+    saveMailSubscriptions(validated);
+    res.json(validated);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(400).json({ error: msg });
   }
 });
 
@@ -1366,6 +1468,76 @@ app.get('/api/jira/weekly', async (req, res) => {
   }
 });
 
+app.get('/api/jira/my-created-week', async (req, res) => {
+  try {
+    const cfg = resolveJiraAuth(process.env);
+    if (cfg.ok === false) {
+      res.status(503).json({
+        error: `Jira 凭据未配置或配置不全。${cfg.reason}\n\n请在 .env 中配置：JIRA_SERVER_URL、JIRA_USERNAME、JIRA_PASSWORD（或 JIRA_API_TOKEN）`,
+        range: { from: '', toExclusive: '', labelZh: '' },
+        issues: [],
+        total: 0,
+        jql: '',
+      });
+      return;
+    }
+
+    const now = Date.now();
+    if (now - jiraAuthFailureState.lastAuthErrorTime < jiraAuthFailureState.cooldownMs) {
+      res.status(503).json({
+        error: `Jira 认证失败，服务已暂停调用。错误信息：${jiraAuthFailureState.errorHint}\n\n请修正 .env 中的 Jira 凭据配置后重试。`,
+        range: { from: '', toExclusive: '', labelZh: '' },
+        issues: [],
+        total: 0,
+        jql: '',
+      });
+      return;
+    }
+
+    const { fromYmd, toYmdExclusive, labelZh } = weekJqlDateRange(0);
+    const jql = jqlMyIssuesAssignedCreatedInWeek(fromYmd, toYmdExclusive);
+    const r = await jiraSearch({
+      jql,
+      maxResults: 100,
+      fields: ['summary', 'status', 'created', 'issuetype', 'priority', 'project'],
+      logContext: 'GET /api/jira/my-created-week',
+    });
+    if (r.authError) {
+      jiraAuthFailureState.lastAuthErrorTime = Date.now();
+      jiraAuthFailureState.errorHint = r.authError;
+      res.status(503).json({
+        error: r.authError,
+        range: { from: fromYmd, toExclusive: toYmdExclusive, labelZh },
+        issues: [],
+        total: 0,
+        jql,
+      });
+      return;
+    }
+    if (r.error) {
+      res.status(502).json({
+        error: r.error,
+        range: { from: fromYmd, toExclusive: toYmdExclusive, labelZh },
+        issues: [],
+        total: 0,
+        jql,
+      });
+      return;
+    }
+    jiraAuthFailureState.lastAuthErrorTime = 0;
+    jiraAuthFailureState.errorHint = '';
+    res.json({
+      range: { from: fromYmd, toExclusive: toYmdExclusive, labelZh },
+      jql,
+      issues: r.issues,
+      total: r.total,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
 app.get('/api/deploy/jira/resolution/:issueKey', async (req, res) => {
   try {
     const issueKey = req.params.issueKey?.trim().toUpperCase();
@@ -1385,6 +1557,35 @@ app.get('/api/deploy/jira/resolution/:issueKey', async (req, res) => {
     res.status(500).json({ error: msg });
   }
 });
+
+function parseDeployDagFromBody(body: {
+  dag?: unknown;
+}): { nodes: string[]; links?: DeployGraphLink[] } | null {
+  const dag = body?.dag;
+  if (!dag || typeof dag !== 'object') return null;
+  const raw = dag as { nodes?: unknown; links?: unknown };
+  const nodes = Array.isArray(raw.nodes)
+    ? raw.nodes.map((value) => String(value).trim()).filter(Boolean)
+    : [];
+  if (!nodes.length) return null;
+
+  const links = Array.isArray(raw.links)
+    ? raw.links
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null;
+          const source = typeof (item as { source?: unknown }).source === 'string'
+            ? (item as { source: string }).source.trim()
+            : '';
+          const target = typeof (item as { target?: unknown }).target === 'string'
+            ? (item as { target: string }).target.trim()
+            : '';
+          return source && target ? { source, target } : null;
+        })
+        .filter(Boolean) as DeployGraphLink[]
+    : undefined;
+
+  return { nodes, links: links?.length ? links : undefined };
+}
 
 function parseProjectIdsFromBody(body: {
   projectId?: unknown;
@@ -1524,14 +1725,20 @@ app.post('/api/deploy/jenkins/build-result', async (req, res) => {
 /** 服务端 DAG 编排：启动后返回 runId，日志与节点状态经 SSE 或 GET 快照拉取 */
 app.post('/api/deploy/pipeline/runs/start', (req, res) => {
   try {
+    const dag = parseDeployDagFromBody(req.body || {});
     const projectIds = parseProjectIdsFromBody(req.body || {});
-    if (!projectIds.length) {
-      res.status(400).json({ error: 'projectIds required' });
+    if (!dag && !projectIds.length) {
+      res.status(400).json({ error: 'projectIds or dag.nodes required' });
       return;
     }
     const jiraId = typeof req.body?.jiraId === 'string' ? req.body.jiraId.trim() : undefined;
     const branch = typeof req.body?.branch === 'string' ? req.body.branch.trim() : undefined;
-    const started = startDeployPipelineRun({ projectIds, jiraId, branch });
+    const started = startDeployPipelineRun({
+      dag: dag ?? undefined,
+      projectIds: dag ? undefined : projectIds,
+      jiraId,
+      branch,
+    });
     if (started.ok === false) {
       res.status(started.status).json({ error: started.error });
       return;
@@ -1797,6 +2004,7 @@ findFreePort(PORT)
 
     const server = app.listen(actualPort, '0.0.0.0', () => {
       scheduleTaskT1();
+      scheduleMailDigest();
       if (actualPort !== PORT) {
         console.log(`[deploy-api] 端口 ${PORT} 已被占用，自动切换至 ${actualPort}`);
         console.log(`[deploy-api] 提示：Vite 会在启动时读取 .deploy-api-port，代理将自动对齐`);

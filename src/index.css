@@ -347,6 +347,55 @@ mark {
   flex-direction: column;
 }
 
+.summary-panel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+  flex-shrink: 0;
+}
+
+.summary-panel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: var(--surface, #fff);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.summary-panel-tab:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--color-primary-600) 35%, transparent);
+}
+
+.summary-panel-tab--active {
+  background: color-mix(in srgb, var(--color-primary-600) 12%, transparent);
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--color-primary-600) 40%, transparent);
+}
+
+.summary-panel-tab__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary-600) 15%, transparent);
+  color: var(--primary);
+}
+
+.summary-panel-tab--active .summary-panel-tab__badge {
+  background: color-mix(in srgb, var(--color-primary-600) 22%, white);
+}
+
+
 .pkmer-text-body {
   color: var(--color-ink);
 }
@@ -2014,10 +2063,6 @@ html.electron-float-mode #root > .float-dock-root {
   background: var(--color-surface-hover);
 }
 
-/* React Flow MiniMap Customization */
-.react-flow__minimap {
-  background: var(--color-shell-bg);
-  border: 1px solid var(--color-hairline);
-  border-radius: 8px;
-  overflow: hidden;
+.react-flow__attribution {
+  display: none !important;
 }

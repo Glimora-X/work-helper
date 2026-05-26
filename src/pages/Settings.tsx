@@ -29,6 +29,18 @@ const ENV_GROUPS: { title: string; keys: string[] }[] = [
     title: '知识库路径与搜索',
     keys: ['ASSISTANT_KB_LOCAL_DIRS', 'ASSISTANT_KB_SEARCH_URLS', 'ASSISTANT_WIKI_SEARCH_URL_TEMPLATE'],
   },
+  {
+    title: '阿里邮箱',
+    keys: [
+      'MAIL_IMAP_USER',
+      'MAIL_IMAP_PASSWORD',
+      'MAIL_IMAP_HOST',
+      'MAIL_IMAP_PORT',
+      'MAIL_DIGEST_SCHEDULE',
+      'MAIL_DIGEST_LOOKBACK_HOURS',
+      'MAIL_DIGEST_ENABLED',
+    ],
+  },
 ];
 
 function isSecretKey(key: string): boolean {
@@ -36,7 +48,8 @@ function isSecretKey(key: string): boolean {
     key.includes('TOKEN') ||
     key.includes('PASSWORD') ||
     key === 'JENKINS_TOKEN' ||
-    key === 'JIRA_PASSWORD'
+    key === 'JIRA_PASSWORD' ||
+    key === 'MAIL_IMAP_PASSWORD'
   );
 }
 
@@ -143,10 +156,13 @@ export default function Settings() {
     setExpandedGroups({});
   };
 
-  const testConnection = async (service: 'jenkins' | 'jira' | 'confluence') => {
+  const testConnection = async (service: 'jenkins' | 'jira' | 'confluence' | 'mail') => {
     setTestingConnection(service);
     try {
-      const endpoint = `/api/assistant/test-connection/${service}`;
+      const endpoint =
+        service === 'mail'
+          ? '/api/mail/test-connection'
+          : `/api/assistant/test-connection/${service}`;
       const res = await fetch(endpoint, { method: 'POST' });
       const data = (await res.json()) as { success?: boolean; error?: string };
       
@@ -382,6 +398,7 @@ export default function Settings() {
                   'Jira': 'Jira 服务器地址和认证信息，用于任务跟踪和周报生成',
                   'Confluence / Wiki': 'Confluence/Wiki 访问凭据，用于知识库搜索和文档集成',
                   '知识库路径与搜索': '本地知识库目录和远程搜索 URL，AI 助手的知识来源',
+                  '阿里邮箱': 'IMAP 凭据与 Digest 调度；密码须为网页端「三方客户端安全密码」。订阅规则见 config/mail-subscriptions.json',
                 };
                 
                 const isExpanded = expandedGroups[g.title] || false;
@@ -407,26 +424,55 @@ export default function Settings() {
                       )}
                       <h3 className="text-sm font-semibold pkmer-text-body flex-1">{g.title}</h3>
                       <span className={`text-xs font-medium ${statusColor}`}>{statusText}</span>
-                      {['Jenkins', 'Jira', 'Confluence / Wiki'].includes(g.title) && (
+                      {['Jenkins', 'Jira', 'Confluence / Wiki', '阿里邮箱'].includes(g.title) && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const service = g.title.includes('Jenkins') ? 'jenkins' : g.title.includes('Jira') ? 'jira' : 'confluence';
+                            const service = g.title.includes('Jenkins')
+                              ? 'jenkins'
+                              : g.title.includes('Jira')
+                                ? 'jira'
+                                : g.title.includes('阿里邮箱')
+                                  ? 'mail'
+                                  : 'confluence';
                             void testConnection(service);
                           }}
                           disabled={testingConnection !== null}
                           className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] pkmer-text-secondary hover:border-gray-300 hover:pkmer-text-body disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
-                          {testingConnection === (g.title.includes('Jenkins') ? 'jenkins' : g.title.includes('Jira') ? 'jira' : 'confluence') ? (
+                          {testingConnection ===
+                          (g.title.includes('Jenkins')
+                            ? 'jenkins'
+                            : g.title.includes('Jira')
+                              ? 'jira'
+                              : g.title.includes('阿里邮箱')
+                                ? 'mail'
+                                : 'confluence') ? (
                             <>
                               <Loader2 className="h-3 w-3 animate-spin" /> 测试中…
                             </>
-                          ) : connectionTestResults[g.title.includes('Jenkins') ? 'jenkins' : g.title.includes('Jira') ? 'jira' : 'confluence'] === 'success' ? (
+                          ) : connectionTestResults[
+                              g.title.includes('Jenkins')
+                                ? 'jenkins'
+                                : g.title.includes('Jira')
+                                  ? 'jira'
+                                  : g.title.includes('阿里邮箱')
+                                    ? 'mail'
+                                    : 'confluence'
+                            ] === 'success' ? (
                             <>
                               <CheckCircle2 className="h-3 w-3 text-green-600" /> 成功
                             </>
-                          ) : connectionTestResults[g.title.includes('Jenkins') ? 'jenkins' : g.title.includes('Jira') ? 'jira' : 'confluence'] === 'error' ? (
+                          ) : connectionTestResults[
+                              g.title.includes('Jenkins')
+                                ? 'jenkins'
+                                : g.title.includes('Jira')
+                                  ? 'jira'
+                                  : g.title.includes('阿里邮箱')
+                                    ? 'mail'
+                                    : 'confluence'
+                            ] === 'error' ? (
                             <>
                               <XCircle className="h-3 w-3 text-red-600" /> 失败
                             </>

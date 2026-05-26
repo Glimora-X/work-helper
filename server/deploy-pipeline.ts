@@ -8,6 +8,13 @@ import path from 'node:path';
 import { triggerJenkinsJob, pollBuildUntilComplete } from './jenkins-client';
 import { buildDeployParameters, getJenkinsCredentialsFromEnv } from './deploy-contract';
 import { loadDeployProjectConfig, resolveDeployTargets } from './deploy-project-config';
+import {
+  buildTaskKeyFromStages,
+  computeExecutionStages,
+  flattenExecutionStages,
+  resolveDeployLinks,
+  type DeployGraphLink,
+} from '../src/lib/deploy-dag.ts';
 
 const STATS_PATH = path.join(process.cwd(), '.deploy-pipeline-stats.json');
 const MAX_EVENTS_PER_RUN = 500;
@@ -39,6 +46,7 @@ export interface DeployPipelineRun {
   jiraId?: string;
   branch?: string;
   nodes: DeployPipelineNodeState[];
+  executionStages: string[][];
   events: DeployPipelineRunEvent[];
   activeNodeId: string | null;
   createdAt: string;
@@ -184,17 +192,35 @@ export type StartDeployPipelineResult =
   | { ok: false; error: string; status: number };
 
 export function startDeployPipelineRun(args: {
-  projectIds: string[];
+  projectIds?: string[];
+  dag?: { nodes: string[]; links?: DeployGraphLink[] };
   jiraId?: string;
   branch?: string;
 }): StartDeployPipelineResult {
-  const projectIds = args.projectIds.map((s) => String(s).trim()).filter(Boolean);
-  if (!projectIds.length) {
-    return { ok: false, error: 'projectIds required', status: 400 };
+  const dagNodes = Array.isArray(args.dag?.nodes)
+    ? args.dag!.nodes.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  const fallbackIds = (args.projectIds ?? []).map((s) => String(s).trim()).filter(Boolean);
+  const nodeNames = dagNodes.length ? dagNodes : fallbackIds;
+
+  if (!nodeNames.length) {
+    return { ok: false, error: 'projectIds or dag.nodes required', status: 400 };
   }
 
-  const taskKey = projectIds.join(',');
-  const nodes: DeployPipelineNodeState[] = projectIds.map((name) => ({
+  let executionStages: string[][];
+  try {
+    executionStages = computeExecutionStages(
+      nodeNames,
+      resolveDeployLinks(nodeNames, args.dag?.links)
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg, status: 400 };
+  }
+
+  const orderedNames = flattenExecutionStages(executionStages);
+  const taskKey = buildTaskKeyFromStages(executionStages);
+  const nodes: DeployPipelineNodeState[] = orderedNames.map((name) => ({
     id: randomUUID(),
     name,
     status: 'idle',
@@ -207,6 +233,7 @@ export function startDeployPipelineRun(args: {
     jiraId: args.jiraId?.trim() || undefined,
     branch: args.branch?.trim() || undefined,
     nodes,
+    executionStages,
     events: [],
     activeNodeId: null,
     createdAt: new Date().toISOString(),
@@ -216,10 +243,168 @@ export function startDeployPipelineRun(args: {
   bumpPipelineTaskStats(taskKey);
   pruneRunsIfNeeded();
 
-  pushLog(run, '服务端编排：已创建流水线实例，开始依次触发 Jenkins…', 'system');
+  const parallelHint =
+    executionStages.some((stage) => stage.length > 1) ? '（含并行阶段）' : '';
+  pushLog(run, `服务端编排：已创建流水线实例${parallelHint}，开始触发 Jenkins…`, 'system');
   void executeDeployPipeline(run.id);
 
   return { ok: true, runId: run.id };
+}
+
+type JenkinsAuthBundle = {
+  user: string;
+  token: string;
+  auth: string;
+};
+
+type NodeRunOutcome =
+  | { ok: true; partial?: boolean }
+  | { ok: false; partial?: boolean; failed?: boolean; error?: string };
+
+function findNodeByName(run: DeployPipelineRun, name: string): DeployPipelineNodeState | undefined {
+  return run.nodes.find((n) => n.name === name);
+}
+
+async function runDeployPipelineNode(
+  run: DeployPipelineRun,
+  node: DeployPipelineNodeState,
+  jenkins: JenkinsAuthBundle,
+  config: ReturnType<typeof loadDeployProjectConfig>,
+  waitForComplete: boolean
+): Promise<NodeRunOutcome> {
+  pushLog(run, `[Jenkins] Preparing trigger for project: ${node.name}`, 'info');
+
+  try {
+    const t0 = performance.now();
+    const targets = resolveDeployTargets(config, {
+      projectIds: [node.name],
+      jiraId: run.jiraId,
+      explicitBranch: run.branch,
+    });
+
+    let lastBranch: string | undefined;
+    type TriggerRow = Awaited<ReturnType<typeof triggerJenkinsJob>> & {
+      projectId: string;
+      projectLabel: string;
+      branch: string;
+    };
+    const rows: TriggerRow[] = [];
+
+    for (const target of targets) {
+      const parameters = buildDeployParameters(
+        { jiraId: run.jiraId, branch: target.branch },
+        {
+          JENKINS_PARAM_JIRA: target.jiraParamName,
+          JENKINS_PARAM_BRANCH: target.branchParamName,
+        }
+      );
+      const r = await triggerJenkinsJob({
+        jenkinsBaseUrl: target.jenkinsBaseUrl,
+        user: jenkins.user,
+        token: jenkins.token,
+        jobSegments: target.jobSegments,
+        parameters,
+        pollQueue: true,
+        pollTimeoutMs: 120_000,
+      });
+      rows.push({
+        ...r,
+        projectId: target.projectId,
+        projectLabel: target.label,
+        branch: target.branch,
+      });
+      lastBranch = target.branch;
+      if (r.error) {
+        throw new Error(r.error);
+      }
+    }
+
+    const jobResult = rows[rows.length - 1];
+    pushLog(run, `[Jenkins] ${jobResult?.message || 'Triggered.'}`, 'info');
+    if (lastBranch) {
+      pushLog(run, `[Jenkins] Branch resolved for ${node.name}: ${lastBranch}`, 'system');
+    }
+    if (jobResult?.queueUrl) {
+      pushLog(run, `[Jenkins] Queue: ${jobResult.queueUrl}`, 'system');
+    }
+    if (jobResult?.buildUrl) {
+      pushLog(run, `[Jenkins] Build: ${jobResult.buildUrl}`, 'system');
+    }
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    const nextStatus: DeployPipelineNodeStatus = jobResult?.buildUrl ? 'running' : 'queued';
+    updateNode(run, node.id, {
+      status: nextStatus,
+      duration: `${elapsed}s`,
+      queueUrl: jobResult?.queueUrl,
+      buildUrl: jobResult?.buildUrl,
+      buildNumber: jobResult?.buildNumber,
+      branch: lastBranch,
+    });
+    pushNodesSnapshot(run);
+
+    if (nextStatus === 'queued') {
+      pushLog(
+        run,
+        `[${node.name}] Jenkins 已接收入队，但未在超时前返回 Build URL；停止后续依赖节点。`,
+        'warn'
+      );
+      return { ok: false, partial: true };
+    }
+
+    if (jobResult?.buildUrl && waitForComplete) {
+      pushLog(
+        run,
+        `[${node.name}] Build #${jobResult.buildNumber} 已启动，等待执行完成后再进入下一阶段…`,
+        'system'
+      );
+      const buildResult = await pollBuildUntilComplete(
+        jobResult.buildUrl,
+        jenkins.auth,
+        1_800_000,
+        5000
+      );
+
+      if (buildResult.error && buildResult.building) {
+        pushLog(
+          run,
+          `[${node.name}] 等待 build 完成超时：${buildResult.error}，中断后续节点。`,
+          'warn'
+        );
+        updateNode(run, node.id, { status: 'queued' });
+        return { ok: false, partial: true };
+      }
+
+      if (buildResult.result !== 'SUCCESS') {
+        const reason = buildResult.result ?? buildResult.error ?? 'UNKNOWN';
+        pushLog(run, `[${node.name}] Build 结果为 ${reason}，中断后续依赖节点。`, 'error');
+        updateNode(run, node.id, { status: 'failed' });
+        return { ok: false, failed: true, error: String(reason) };
+      }
+
+      const buildDuration = buildResult.duration
+        ? `${(buildResult.duration / 1000).toFixed(0)}s`
+        : `${elapsed}s`;
+      pushLog(run, `[${node.name}] ✅ Build SUCCESS (耗时 ${buildDuration})`, 'success');
+      updateNode(run, node.id, { status: 'success', duration: buildDuration });
+      pushNodesSnapshot(run);
+      return { ok: true };
+    }
+
+    if (jobResult?.buildUrl) {
+      pushLog(run, `[${node.name}] Jenkins build confirmed.`, 'success');
+    }
+    updateNode(run, node.id, {
+      status: jobResult?.buildUrl ? 'success' : 'queued',
+    });
+    pushNodesSnapshot(run);
+    return { ok: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    pushLog(run, `[Jenkins ERROR] Failed to trigger ${node.name}: ${message}`, 'error');
+    updateNode(run, node.id, { status: 'failed' });
+    return { ok: false, failed: true, error: message };
+  }
 }
 
 async function executeDeployPipeline(runId: string): Promise<void> {
@@ -250,163 +435,66 @@ async function executeDeployPipeline(runId: string): Promise<void> {
   }
 
   const auth = jenkinsAuthHeader(jenkins.credentials.user, jenkins.credentials.token);
+  const jenkinsBundle: JenkinsAuthBundle = {
+    user: jenkins.credentials.user,
+    token: jenkins.credentials.token,
+    auth,
+  };
 
-  for (let i = 0; i < run.nodes.length; i++) {
-    const node = run.nodes[i];
-    run.activeNodeId = node.id;
-    updateNode(run, node.id, { status: 'running' });
+  const stages = run.executionStages.length
+    ? run.executionStages
+    : run.nodes.map((n) => [n.name]);
+
+  for (let stageIdx = 0; stageIdx < stages.length; stageIdx++) {
+    const stage = stages[stageIdx];
+    const stageNodes = stage
+      .map((name) => findNodeByName(run, name))
+      .filter(Boolean) as DeployPipelineNodeState[];
+    if (!stageNodes.length) continue;
+
+    const waitForComplete = stageIdx < stages.length - 1;
+    for (const node of stageNodes) {
+      run.activeNodeId = node.id;
+      updateNode(run, node.id, { status: 'running' });
+    }
     pushNodesSnapshot(run);
 
-    pushLog(run, `[Jenkins] Preparing trigger for project: ${node.name}`, 'info');
+    if (stageNodes.length > 1) {
+      pushLog(run, `[DAG] 并行触发: ${stageNodes.map((n) => n.name).join(', ')}`, 'system');
+    }
 
-    try {
-      const t0 = performance.now();
-      const targets = resolveDeployTargets(config, {
-        projectIds: [node.name],
-        jiraId: run.jiraId,
-        explicitBranch: run.branch,
-      });
+    const outcomes = await Promise.all(
+      stageNodes.map((node) =>
+        runDeployPipelineNode(run, node, jenkinsBundle, config, waitForComplete)
+      )
+    );
 
-      let lastBranch: string | undefined;
-      type TriggerRow = Awaited<ReturnType<typeof triggerJenkinsJob>> & {
-        projectId: string;
-        projectLabel: string;
-        branch: string;
-      };
-      const rows: TriggerRow[] = [];
-
-      for (const target of targets) {
-        const parameters = buildDeployParameters(
-          { jiraId: run.jiraId, branch: target.branch },
-          {
-            JENKINS_PARAM_JIRA: target.jiraParamName,
-            JENKINS_PARAM_BRANCH: target.branchParamName,
-          }
-        );
-        const r = await triggerJenkinsJob({
-          jenkinsBaseUrl: target.jenkinsBaseUrl,
-          user: jenkins.credentials.user,
-          token: jenkins.credentials.token,
-          jobSegments: target.jobSegments,
-          parameters,
-          pollQueue: true,
-          pollTimeoutMs: 120_000,
-        });
-        rows.push({
-          ...r,
-          projectId: target.projectId,
-          projectLabel: target.label,
-          branch: target.branch,
-        });
-        lastBranch = target.branch;
-        if (r.error) {
-          throw new Error(r.error);
-        }
-      }
-
-      const jobResult = rows[rows.length - 1];
-      pushLog(run, `[Jenkins] ${jobResult?.message || 'Triggered.'}`, 'info');
-      if (lastBranch) {
-        pushLog(run, `[Jenkins] Branch resolved for ${node.name}: ${lastBranch}`, 'system');
-      }
-      if (jobResult?.queueUrl) {
-        pushLog(run, `[Jenkins] Queue: ${jobResult.queueUrl}`, 'system');
-      }
-      if (jobResult?.buildUrl) {
-        pushLog(run, `[Jenkins] Build: ${jobResult.buildUrl}`, 'system');
-      }
-
-      const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-      const nextStatus: DeployPipelineNodeStatus = jobResult?.buildUrl ? 'running' : 'queued';
-      updateNode(run, node.id, {
-        status: nextStatus,
-        duration: `${elapsed}s`,
-        queueUrl: jobResult?.queueUrl,
-        buildUrl: jobResult?.buildUrl,
-        buildNumber: jobResult?.buildNumber,
-        branch: lastBranch,
-      });
-      pushNodesSnapshot(run);
-
-      if (nextStatus === 'queued') {
-        pushLog(
-          run,
-          `[${node.name}] Jenkins 已接收入队，但未在超时前返回 Build URL；停止后续依赖节点。`,
-          'warn'
-        );
-        run.status = 'completed';
+    for (const outcome of outcomes) {
+      if (outcome.ok === false) {
         run.activeNodeId = null;
-        pushEvent(run, { type: 'completed', timestamp: nowTs(), payload: { partial: true } });
+        if (outcome.failed) {
+          run.status = 'failed';
+          pushEvent(run, {
+            type: 'failed',
+            timestamp: nowTs(),
+            payload: { error: outcome.error || 'node failed' },
+          });
+        } else {
+          run.status = 'completed';
+          pushEvent(run, { type: 'completed', timestamp: nowTs(), payload: { partial: true } });
+        }
         pushNodesSnapshot(run);
         return;
       }
-
-      if (jobResult?.buildUrl && i < run.nodes.length - 1) {
-        pushLog(
-          run,
-          `[${node.name}] Build #${jobResult.buildNumber} 已启动，等待执行完成后再触发下一节点…`,
-          'system'
-        );
-        const buildResult = await pollBuildUntilComplete(
-          jobResult.buildUrl,
-          auth,
-          1_800_000,
-          5000
-        );
-
-        if (buildResult.error && buildResult.building) {
-          pushLog(
-            run,
-            `[${node.name}] 等待 build 完成超时：${buildResult.error}，中断后续节点。`,
-            'warn'
-          );
-          updateNode(run, node.id, { status: 'queued' });
-          run.status = 'completed';
-          run.activeNodeId = null;
-          pushEvent(run, { type: 'completed', timestamp: nowTs(), payload: { partial: true } });
-          pushNodesSnapshot(run);
-          return;
-        }
-
-        if (buildResult.result !== 'SUCCESS') {
-          const reason = buildResult.result ?? buildResult.error ?? 'UNKNOWN';
-          pushLog(run, `[${node.name}] Build 结果为 ${reason}，中断后续依赖节点。`, 'error');
-          updateNode(run, node.id, { status: 'failed' });
-          run.status = 'failed';
-          run.activeNodeId = null;
-          pushEvent(run, { type: 'failed', timestamp: nowTs(), payload: { error: String(reason) } });
-          pushNodesSnapshot(run);
-          return;
-        }
-
-        const buildDuration = buildResult.duration
-          ? `${(buildResult.duration / 1000).toFixed(0)}s`
-          : `${elapsed}s`;
-        pushLog(run, `[${node.name}] ✅ Build SUCCESS (耗时 ${buildDuration})`, 'success');
-        updateNode(run, node.id, { status: 'success', duration: buildDuration });
-        pushNodesSnapshot(run);
-      } else {
-        if (jobResult?.buildUrl) {
-          pushLog(run, `[${node.name}] Jenkins build confirmed.`, 'success');
-        }
-        updateNode(run, node.id, {
-          status: jobResult?.buildUrl ? 'success' : 'queued',
-        });
-        pushNodesSnapshot(run);
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      pushLog(run, `[Jenkins ERROR] Failed to trigger ${node.name}: ${message}`, 'error');
-      updateNode(run, node.id, { status: 'failed' });
-      run.status = 'failed';
-      run.activeNodeId = null;
-      pushEvent(run, { type: 'failed', timestamp: nowTs(), payload: { error: message } });
-      pushNodesSnapshot(run);
-      return;
     }
 
-    if (i < run.nodes.length - 1) {
-      pushLog(run, `[DAG] Proceeding to dependent node: ${run.nodes[i + 1].name}`, 'system');
+    if (stageIdx < stages.length - 1) {
+      const nextStage = stages[stageIdx + 1];
+      pushLog(
+        run,
+        `[DAG] 进入下一阶段: ${nextStage.join(nextStage.length > 1 ? ' / ' : ', ')}`,
+        'system'
+      );
     }
   }
 

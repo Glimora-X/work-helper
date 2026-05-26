@@ -92,6 +92,13 @@ export const ASSISTANT_ENV_UI_KEYS = [
   'ASSISTANT_KB_LOCAL_DIRS',
   'ASSISTANT_KB_SEARCH_URLS',
   'ASSISTANT_WIKI_SEARCH_URL_TEMPLATE',
+  'MAIL_IMAP_USER',
+  'MAIL_IMAP_PASSWORD',
+  'MAIL_IMAP_HOST',
+  'MAIL_IMAP_PORT',
+  'MAIL_DIGEST_SCHEDULE',
+  'MAIL_DIGEST_LOOKBACK_HOURS',
+  'MAIL_DIGEST_ENABLED',
 ] as const;
 
 export type AssistantEnvUiKey = (typeof ASSISTANT_ENV_UI_KEYS)[number];
@@ -102,6 +109,7 @@ const SECRET_KEYS = new Set<AssistantEnvUiKey>([
   'JIRA_API_TOKEN',
   'CONFLUENCE_API_TOKEN',
   'CONFLUENCE_PASSWORD',
+  'MAIL_IMAP_PASSWORD',
 ]);
 
 export function isSecretEnvKey(key: string): boolean {

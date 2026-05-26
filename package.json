@@ -25,7 +25,7 @@
     "clean": "rm -rf dist dist-electron release",
     "dist": "npm run build:desktop && electron-builder --mac zip",
     "dist:dir": "npm run build:desktop && electron-builder --dir --mac",
-    "test": "node --import tsx --test test/server/*.test.ts test/frontend/*.test.tsx",
+    "test": "node --import tsx --test test/server/*.test.ts test/lib/*.test.ts test/frontend/*.test.tsx",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

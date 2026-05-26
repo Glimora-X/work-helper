@@ -16,6 +16,7 @@ const API_PREFIXES = [
   '/api/assistant',
   '/api/knowledge',
   '/api/jira',
+  '/api/mail',
 ] as const;
 
 const HOP_BY_HOP_REQ = new Set([
