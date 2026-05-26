@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, type FormEvent, type MouseEvent } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, type FormEvent, type MouseEvent } from 'react';
 import { Terminal, CheckCircle2, XCircle, Loader2, ArrowRight, Clock, Box, Play, Plus, X, Trash2, Save, FilePlus, Tag, GitBranch, ExternalLink, ShieldAlert, Rocket, BarChart2 } from 'lucide-react';
 import {
   ReactFlow,
@@ -145,7 +145,17 @@ function mergeSavedTemplatesWithSeed(saved: Template[], seed: Template[]): Templ
 }
 
 // Custom Node Component for React Flow
-function DeployNodeCard({ data }: { data: DeployNodeData }) {
+function DeployNodeCard({
+  id,
+  data,
+  canEdit = false,
+  onRemove,
+}: {
+  id: string;
+  data: DeployNodeData;
+  canEdit?: boolean;
+  onRemove?: (nodeId: string) => void;
+}) {
   const statusIcon: Record<NodeStatus, React.ReactNode> = {
     idle: <div className="w-2 h-2 rounded-full bg-[color:var(--color-muted-400)]" />,
     running: <Loader2 className="w-3.5 h-3.5 text-[color:var(--color-primary-500)] animate-spin" />,
@@ -163,11 +173,11 @@ function DeployNodeCard({ data }: { data: DeployNodeData }) {
   };
 
   return (
-    <div className={`pkmer-dag-node px-3 py-2 rounded-xl border-2 bg-[color:var(--color-shell-bg)] ${statusBorder[data.status]}`}>
-      <Handle type="target" position={Position.Top} className="w-2 h-2 bg-[color:var(--color-muted-400)]" />
+    <div className={`pkmer-dag-node group relative px-3 py-2 rounded-xl border-2 bg-[color:var(--color-shell-bg)] ${statusBorder[data.status]}`}>
+      <Handle type="target" position={Position.Top} className="pkmer-dag-handle !w-3 !h-3 !border-2 !border-[color:var(--color-shell-bg)] bg-[color:var(--color-primary-500)]" />
       <div className="flex items-center gap-2">
         <div className="shrink-0">{statusIcon[data.status]}</div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-bold font-mono truncate">{data.name}</p>
           <p className="text-[10px] pkmer-text-muted font-mono">{data.branch || data.name}</p>
           {(data.buildUrl || data.queueUrl) && (
@@ -182,8 +192,18 @@ function DeployNodeCard({ data }: { data: DeployNodeData }) {
             </a>
           )}
         </div>
+        {canEdit && onRemove && (
+          <button
+            type="button"
+            title="删除节点"
+            className="nodrag nopan shrink-0 rounded-md p-1 text-[color:var(--color-muted-400)] opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+            onClick={() => onRemove(id)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 bg-[color:var(--color-muted-400)]" />
+      <Handle type="source" position={Position.Bottom} className="pkmer-dag-handle !w-3 !h-3 !border-2 !border-[color:var(--color-shell-bg)] bg-[color:var(--color-primary-500)]" />
     </div>
   );
 }
@@ -290,13 +310,55 @@ export default function Deployment() {
   );
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge({ 
-        ...connection, 
-        markerEnd: { type: MarkerType.ArrowClosed },
-        animated: true,
-      }, eds));
+      if (!connection.source || !connection.target || connection.source === connection.target) return;
+      setEdges((eds) => {
+        if (eds.some((e) => e.source === connection.source && e.target === connection.target)) return eds;
+        return addEdge(
+          {
+            ...connection,
+            markerEnd: { type: MarkerType.ArrowClosed },
+            animated: true,
+          },
+          eds
+        );
+      });
     },
     []
+  );
+
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      const source = connection.source;
+      const target = connection.target;
+      if (!source || !target || source === target) return false;
+      return !edges.some((e) => e.source === source && e.target === target);
+    },
+    [edges]
+  );
+
+  const onNodesDelete = useCallback((deleted: DeployNode[]) => {
+    const ids = new Set(deleted.map((node) => node.id));
+    setEdges((prev) => prev.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target)));
+  }, []);
+
+  const removeNode = useCallback((nodeId: string) => {
+    setNodes((prev) => prev.filter((node) => node.id !== nodeId));
+    setEdges((prev) => prev.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+  }, []);
+
+  const dagEditable = phase === 'draft';
+  const nodeTypes = useMemo(
+    () => ({
+      deploy: (props: { id: string; data: DeployNodeData }) => (
+        <DeployNodeCard
+          id={props.id}
+          data={props.data}
+          canEdit={dagEditable}
+          onRemove={removeNode}
+        />
+      ),
+    }),
+    [dagEditable, removeNode]
   );
 
   // Backwards compatibility - pipeline getter/setter
@@ -749,10 +811,6 @@ export default function Deployment() {
   };
 
   // --- Node Interactions ---
-  const removeNode = (id: string) => {
-    setNodes(prev => prev.filter(n => n.id !== id));
-  };
-
   const handleAddNode = (e: FormEvent) => {
     e.preventDefault();
     const selectedProject = newNodeName.trim() || deployProjects[0]?.id || '';
@@ -760,7 +818,7 @@ export default function Deployment() {
     const newNode: DeployNode = {
       id: `node-${Date.now()}`,
       type: 'deploy',
-      position: { x: 300, y: nodes.length * 150 },
+      position: { x: 280, y: nodes.length * 150 },
       data: { name: selectedProject, status: 'idle' },
     };
     setNodes(prev => [...prev, newNode]);
@@ -1242,9 +1300,17 @@ export default function Deployment() {
                   onNodesChange={onNodesChange}
                   onEdgesChange={onEdgesChange}
                   onConnect={onConnect}
-                  nodeTypes={{ deploy: DeployNodeCard }}
+                  onNodesDelete={onNodesDelete}
+                  isValidConnection={isValidConnection}
+                  nodeTypes={nodeTypes}
                   defaultNodeOptions={{ type: 'deploy' }}
                   proOptions={{ hideAttribution: true }}
+                  nodesDraggable={dagEditable}
+                  nodesConnectable={dagEditable}
+                  nodesDeletable={dagEditable}
+                  edgesDeletable={dagEditable}
+                  elementsSelectable
+                  deleteKeyCode={dagEditable ? ['Backspace', 'Delete'] : null}
                   fitView
                   minZoom={0.5}
                   maxZoom={2}
@@ -1257,7 +1323,39 @@ export default function Deployment() {
 
             {/* Node Config Panel / Execute Button */}
             {phase === 'draft' && (
-              <div className="shrink-0 px-4 py-3" style={{ borderTop: '1px solid var(--border-light)' }}>
+              <div className="shrink-0 px-4 py-3 space-y-2" style={{ borderTop: '1px solid var(--border-light)' }}>
+                <div className="flex items-center gap-2">
+                  {isAddingNode ? (
+                    <form onSubmit={handleAddNode} className="flex flex-1 items-center gap-2 min-w-0">
+                      <select
+                        value={newNodeName || deployProjects[0]?.id || ''}
+                        onChange={(e) => setNewNodeName(e.target.value)}
+                        className="pkmer-input text-xs py-1.5 px-2 flex-1 min-w-0"
+                      >
+                        {deployProjects.map((project) => (
+                          <option key={project.id} value={project.id}>{project.label}</option>
+                        ))}
+                      </select>
+                      <button type="submit" className="text-xs pkmer-link-indigo font-medium shrink-0">添加</button>
+                      <button type="button" onClick={() => setIsAddingNode(false)} className="text-xs pkmer-text-muted shrink-0">取消</button>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewNodeName(deployProjects[0]?.id || '');
+                        setIsAddingNode(true);
+                      }}
+                      disabled={deployProjects.length === 0}
+                      className="text-xs pkmer-link-indigo flex items-center gap-1 disabled:opacity-40"
+                    >
+                      <Plus className="w-3.5 h-3.5" />添加节点
+                    </button>
+                  )}
+                  <span className="text-[10px] pkmer-text-muted ml-auto hidden sm:inline">
+                    拖拽连线 · 选中后 Delete 删除
+                  </span>
+                </div>
                 <button
                   onClick={executePipeline}
                   disabled={nodes.length === 0 || health?.jenkinsConfigured !== true}

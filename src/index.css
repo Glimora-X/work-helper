@@ -2024,6 +2024,15 @@ html.electron-float-mode #root > .float-dock-root {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.react-flow__handle.pkmer-dag-handle {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pkmer-dag-node:hover .react-flow__handle.pkmer-dag-handle {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-500) 20%, transparent);
+}
+
 .react-flow__edge-path {
   stroke: var(--color-hairline);
   stroke-width: 2;
