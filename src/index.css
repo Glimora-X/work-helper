@@ -1425,132 +1425,58 @@ html.electron-float-mode #root > .float-dock-root {
   overflow: hidden;
 }
 
-/* 单胶囊：一层壳体，握柄与主按钮同材同圆角，非「叠上去的模块」 */
+/* 单胶囊：图标铺满壳体，仅 hover 外发光 */
 .float-dock-shell {
   position: relative;
   flex-shrink: 0;
-  width: 46px;
-  height: 46px;
-  border-radius: 24px;
-  background:#f26ea1;;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  overflow: hidden;
+  overflow: visible;
   z-index: 2;
+  transition: box-shadow 0.22s ease;
   /* 命中层是 shell（core 为 pointer-events:none），cursor 必须写在这里，不能只写在子元素 :hover 上 */
   cursor: pointer;
 }
 
-.float-dock-shell--panel-open {
-  width: 40px;
-  height: 40px;
-  border-radius: 22px;
+.float-dock-shell:hover {
+  box-shadow:
+    0 0 16px rgba(124, 224, 255, 0.55),
+    0 0 32px rgba(92, 112, 255, 0.35);
 }
 
 .float-dock-core {
   position: absolute;
-  inset: 10px;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 20px;
   background: transparent;
   pointer-events: none;
 }
 
-.float-dock-shell:hover .float-dock-core-orb {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow:
-    0 10px 28px rgba(92, 112, 255, 0.18),
-    0 0 24px rgba(124, 224, 255, 0.18);
-}
-
-.float-dock-core--active .float-dock-core-orb {
-  box-shadow:
-    0 12px 32px rgba(92, 112, 255, 0.2),
-    0 0 28px rgba(124, 224, 255, 0.22);
-}
-
-.float-dock-core-orb {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0; */
-  border-radius: 18px;
-  /* background:
-    radial-gradient(circle at 30% 28%, rgba(209, 89, 169, 0.96) 0%, rgba(255, 92, 146, 0.92) 36%, rgba(91, 140, 255, 0.92) 68%, rgba(124, 224, 255, 0.78) 100%); */
-  box-shadow:
-    0 8px 24px rgba(92, 112, 255, 0.16),
-    0 0 20px rgba(124, 224, 255, 0.16);
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
-  animation: float-dock-idle 4s ease-in-out infinite;
-}
-
-.float-dock-core-glow {
-  position: absolute;
-  inset: -6px;
-  border-radius: 22px;
-  /* background: */
-    /* radial-gradient(circle at 50% 45%, rgba(246, 85, 235, 0.42) 0%, rgba(255, 255, 255, 0.16) 34%, rgba(255, 255, 255, 0) 72%); */
-  filter: blur(8px);
-  opacity: 0.9;
-  pointer-events: none;
-}
-
 .float-dock-core-logo {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.14);
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 .float-dock-core-logo img {
-  /* width: 30px;
-  height: 30px; */
-  /* border-radius: 6px; */
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   pointer-events: none;
-  /* opacity: 0.96; */
-}
-
-.float-dock-shell:hover {
-  background: #f3aeca;
-}
-
-.float-dock-shell:hover .float-dock-core-glow {
-  opacity: 1;
 }
 
 .float-dock-shell:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-primary-500) 38%, transparent);
   outline-offset: 1px;
-}
-
-@keyframes float-dock-idle {
-  0%,
-  100% {
-    transform: translateY(0);
-    box-shadow:
-      0 8px 24px rgba(92, 112, 255, 0.16),
-      0 0 20px rgba(124, 224, 255, 0.16);
-  }
-  50% {
-    transform: translateY(-2px);
-    box-shadow:
-      0 10px 26px rgba(92, 112, 255, 0.18),
-      0 0 24px rgba(124, 224, 255, 0.2);
-  }
 }
 
 /* 命令抽屉：轻阴影、与底栏略拉近；弱化「弹窗模板感」 */
@@ -1606,14 +1532,6 @@ html.electron-float-mode #root > .float-dock-root {
   line-height: 1.2;
   color: var(--color-muted-800);
   letter-spacing: -0.01em;
-}
-
-.float-dock-panel-sub {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.25;
-  font-weight: 500;
-  color: var(--color-ink-lighter);
 }
 
 .float-dock-panel-toolbar {
@@ -2003,7 +1921,6 @@ html.electron-float-mode #root > .float-dock-root {
   .top-nav-link,
   .pkmer-profile-card,
   .pkmer-btn,
-  .float-dock-trigger,
   .float-dock-action-card {
     transition-duration: 0.01ms !important;
   }

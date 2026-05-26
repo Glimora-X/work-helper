@@ -40,12 +40,12 @@ export default defineConfig(({mode, command}) => {
           type: 'image/png',
         },
         {
-          src: 'app-logo.png',
+          src: 'icon-512@2x.png',
           sizes: '512x512',
           type: 'image/png',
         },
         {
-          src: 'app-logo.png',
+          src: 'icon-512@2x.png',
           sizes: '512x512',
           type: 'image/png',
           purpose: 'any maskable',

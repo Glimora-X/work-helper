@@ -63,7 +63,7 @@
     "appId": "com.local.assistant",
     "productName": "Dottie-Assistant",
     "electronDist": "node_modules/electron/dist",
-    "icon": "public/app-logo-square.png",
+    "icon": "public/icon-512@2x.png",
     "directories": {
       "output": "release"
     },

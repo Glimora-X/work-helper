@@ -92,7 +92,7 @@ EB-->>Dev : release artifacts
 - App metadata and identity
   - appId: com.local.assistant
   - productName: Dottie-Assistant
-  - icon: public/app-logo-square.png
+  - icon: public/icon-512@2x.png
   - extraMetadata.main: dist-electron/main.cjs
 - Output and directories
   - output directory: release

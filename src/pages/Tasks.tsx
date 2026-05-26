@@ -4,8 +4,10 @@ import {
   ChevronRight,
   ExternalLink,
   GripVertical,
+  Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import {type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -52,6 +54,39 @@ function todosDoneLast<T extends {done: boolean}>(list: T[]): T[] {
 }
 
 type JiraStatusPayload = {configured?: boolean; serverUrl?: string};
+
+type IncrementalAutogenResult = {carried: number; jira: number};
+
+function normalizeStoreFromDisk(): Record<string, TodoItem[]> {
+  const raw = loadDailyTodos();
+  const normalized: Record<string, TodoItem[]> = {};
+  for (const [k, list] of Object.entries(raw)) {
+    if (Array.isArray(list) && list.length > 0) normalized[k] = todosDoneLast(list);
+  }
+  return normalized;
+}
+
+async function runIncrementalAutogenForToday(): Promise<IncrementalAutogenResult> {
+  const carried = carryYesterdayIncompleteToToday();
+  let jira = 0;
+  try {
+    const r = await fetch(deployApiUrl('jira', '/my-created-week'));
+    if (r.ok) {
+      const j = (await r.json()) as {
+        issues?: {key: string; fields?: {summary?: string}}[];
+      };
+      jira = appendJiraIssuesToToday(
+        (j.issues ?? []).map((row) => ({
+          key: row.key,
+          summary: row.fields?.summary,
+        })),
+      );
+    }
+  } catch {
+    /* Jira 未配置或网络失败时仅结转昨日 */
+  }
+  return {carried, jira};
+}
 
 function jiraBrowseHref(serverUrl: string | undefined, issueKey: string): string | undefined {
   const base = serverUrl?.trim().replace(/\/$/, '');
@@ -139,6 +174,8 @@ export default function Tasks() {
   const [editDraft, setEditDraft] = useState('');
   const dragFromIndex = useRef<number | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const [autogenBusy, setAutogenBusy] = useState(false);
+  const [autogenHint, setAutogenHint] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = loadDailyTodos();
@@ -150,47 +187,56 @@ export default function Tasks() {
     setHydrated(true);
   }, []);
 
+  const applyIncrementalAutogenResult = useCallback((result: IncrementalAutogenResult) => {
+    setStore(normalizeStoreFromDisk());
+    const {carried, jira} = result;
+    const total = carried + jira;
+    setAutogenHint(
+      total > 0
+        ? `已增量加入 ${total} 条（昨日未完成 ${carried}，本周 Jira ${jira}）`
+        : '没有可新增项（今日已包含昨日未完成与本周 Jira）',
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!autogenHint) return;
+    const t = window.setTimeout(() => setAutogenHint(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [autogenHint]);
+
+  const triggerIncrementalAutogen = useCallback(
+    async (opts: {markDaily: boolean}) => {
+      setAutogenBusy(true);
+      try {
+        const result = await runIncrementalAutogenForToday();
+        if (opts.markDaily) markAutogenRunForDate(todayISODate());
+        applyIncrementalAutogenResult(result);
+      } finally {
+        setAutogenBusy(false);
+      }
+    },
+    [applyIncrementalAutogenResult],
+  );
+
   /** 每日一次：昨日未完成结转 + 本周指派且创建的 Jira 工单 */
   useEffect(() => {
     if (!hydrated) return;
-    const today = todayISODate();
-    if (hasAutogenRunForDate(today)) return;
-
+    if (hasAutogenRunForDate(todayISODate())) return;
     let cancelled = false;
-
     (async () => {
-      carryYesterdayIncompleteToToday();
-      try {
-        const r = await fetch(deployApiUrl('jira', '/my-created-week'));
-        if (!cancelled && r.ok) {
-          const j = (await r.json()) as {
-            issues?: {key: string; fields?: {summary?: string}}[];
-          };
-          const issues = j.issues ?? [];
-          appendJiraIssuesToToday(
-            issues.map((row) => ({
-              key: row.key,
-              summary: row.fields?.summary,
-            })),
-          );
-        }
-      } catch {
-        /* Jira 未配置或网络失败时仅结转昨日 */
-      }
+      const result = await runIncrementalAutogenForToday();
       if (cancelled) return;
-      markAutogenRunForDate(today);
-      const raw = loadDailyTodos();
-      const normalized: Record<string, TodoItem[]> = {};
-      for (const [k, list] of Object.entries(raw)) {
-        if (Array.isArray(list) && list.length > 0) normalized[k] = todosDoneLast(list);
-      }
-      setStore(normalized);
+      markAutogenRunForDate(todayISODate());
+      setStore(normalizeStoreFromDisk());
     })();
-
     return () => {
       cancelled = true;
     };
   }, [hydrated]);
+
+  const onManualIncrementalAutogen = () => {
+    void triggerIncrementalAutogen({markDaily: false});
+  };
 
   /** 周五当天若没有「写周报」则自动补一条（切换回该周五时会再次检查） */
   useEffect(() => {
@@ -437,26 +483,52 @@ export default function Tasks() {
             </div>
           </div>
 
-          <div className="mb-6 flex shrink-0 gap-2">
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={onNewTodoKeyDown}
-              placeholder="输入待办，回车或点击添加（输入法选字时的回车不会提交）"
-              className="flex-1 min-w-0 rounded-xl border px-4 py-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
-              style={{borderColor: 'var(--neutral-200)', color: 'var(--text-primary)'}}
-              aria-label="新待办内容"
-            />
-            <button
-              type="button"
-              onClick={addTodo}
-              className="inline-flex items-center gap-1.5 rounded-xl px-4 py-3 text-sm font-medium text-white shrink-0"
-              style={{backgroundColor: 'var(--accent-primary)'}}
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              添加
-            </button>
+          <div className="mb-6 flex shrink-0 flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onNewTodoKeyDown}
+                placeholder="输入待办，回车或点击添加（输入法选字时的回车不会提交）"
+                className="flex-1 min-w-0 rounded-xl border px-4 py-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
+                style={{borderColor: 'var(--neutral-200)', color: 'var(--text-primary)'}}
+                aria-label="新待办内容"
+              />
+              <button
+                type="button"
+                onClick={addTodo}
+                className="inline-flex items-center gap-1.5 rounded-xl px-4 py-3 text-sm font-medium text-white shrink-0"
+                style={{backgroundColor: 'var(--accent-primary)'}}
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                添加
+              </button>
+            </div>
+            {isToday ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={autogenBusy}
+                  onClick={onManualIncrementalAutogen}
+                  className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-neutral-50 disabled:opacity-60"
+                  style={{borderColor: 'var(--neutral-200)', color: 'var(--text-secondary)'}}
+                  title="仅补充今日尚未存在的昨日未完成与本周 Jira，不覆盖已有项"
+                >
+                  {autogenBusy ? (
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                  同步待办
+                </button>
+                {autogenHint ? (
+                  <span className="text-sm" style={{color: 'var(--text-muted)'}} role="status">
+                    {autogenHint}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {todos.length === 0 ? (

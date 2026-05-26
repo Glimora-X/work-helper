@@ -7,7 +7,11 @@
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {Play, Plus, Rocket} from 'lucide-react';
-import {addPlainTextTodoToToday} from '../lib/daily-todos-storage';
+import {
+  addPlainTextTodoToToday,
+  countTodayOpenTodos,
+  DAILY_TODOS_STORAGE_KEY,
+} from '../lib/daily-todos-storage';
 import {extractJiraAndBranch} from '../lib/float-command/deploy-parse-extract';
 import {
   type DeployTemplateLike,
@@ -128,6 +132,11 @@ export default function FloatDock() {
   const [line, setLine] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [rs, setRs] = useState<ResolveUI>({phase: 'input'});
+  const [todoOpenCount, setTodoOpenCount] = useState(countTodayOpenTodos);
+
+  const refreshTodoOpenCount = useCallback(() => {
+    setTodoOpenCount(countTodayOpenTodos());
+  }, []);
 
   const profilesForResolve: StartupProfileLike[] = useMemo(() => INITIAL_PROFILES as StartupProfileLike[], []);
 
@@ -169,6 +178,20 @@ export default function FloatDock() {
       window.clearTimeout(timerId);
     };
   }, [panelOpen, tab, rs.phase, floatDebug, syncFloatSize]);
+
+  useEffect(() => {
+    refreshTodoOpenCount();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === DAILY_TODOS_STORAGE_KEY || e.key === null) refreshTodoOpenCount();
+    };
+    const onFocus = () => refreshTodoOpenCount();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refreshTodoOpenCount]);
 
   useEffect(() => {
     document.documentElement.classList.add('electron-float-mode');
@@ -226,6 +249,7 @@ export default function FloatDock() {
       if (r.added) {
         setToast('已加入今日待办');
         setLine('');
+        refreshTodoOpenCount();
       } else if (r.reason === 'duplicate') {
         setToast('今日已有相同待办');
       } else {
@@ -271,7 +295,11 @@ export default function FloatDock() {
       }
       setRs({phase: 'previewDeploy', template: res.template, confidence: res.confidence});
     }
-  }, [tab, line, profilesForResolve]);
+  }, [tab, line, profilesForResolve, refreshTodoOpenCount]);
+
+  useEffect(() => {
+    if (panelOpen) refreshTodoOpenCount();
+  }, [panelOpen, refreshTodoOpenCount]);
 
   useEffect(() => {
     if (!panelOpen) return;
@@ -409,7 +437,6 @@ export default function FloatDock() {
             <div className="float-dock-panel-head-row">
               <div className="float-dock-panel-title-wrap">
                 <h2 className="float-dock-panel-title">快捷指令</h2>
-                <p className="float-dock-panel-sub">待办、部署、启动</p>
               </div>
               <div className="float-dock-panel-toolbar">
                 <button
@@ -461,8 +488,10 @@ export default function FloatDock() {
           {rs.phase === 'input' ? (
             <>
               <label className="float-dock-field float-dock-field--segmented">
-                <span className="float-dock-field-kicker">{TAB_FIELD[tab].kicker}</span>
-                <span className="float-dock-field-label">{TAB_FIELD[tab].label}</span>
+                <p>
+                  <span className="float-dock-field-kicker">{TAB_FIELD[tab].kicker}</span> 
+                  <span className="float-dock-field-label">{TAB_FIELD[tab].label}</span>
+                </p>
                 {tab === 'deploy' ? (
                   <textarea
                     className="float-dock-input float-dock-input--deploy"
@@ -616,19 +645,33 @@ export default function FloatDock() {
 
       <div
         className={`float-dock-shell${panelOpen ? ' float-dock-shell--panel-open' : ''}`}
-        title="双击打开快捷指令，按住拖动"
-        aria-label={panelOpen ? '双击关闭快捷指令' : '双击打开快捷指令'}
+        title={
+          todoOpenCount > 0
+            ? `双击打开快捷指令，按住拖动（今日待办 ${todoOpenCount} 项未完成）`
+            : '双击打开快捷指令，按住拖动'
+        }
+        aria-label={
+          panelOpen
+            ? todoOpenCount > 0
+              ? `双击关闭快捷指令，今日待办 ${todoOpenCount} 项未完成`
+              : '双击关闭快捷指令'
+            : todoOpenCount > 0
+              ? `双击打开快捷指令，今日待办 ${todoOpenCount} 项未完成`
+              : '双击打开快捷指令'
+        }
       >
         <div
           className={`float-dock-core${panelOpen ? ' float-dock-core--active' : ''}`}
           aria-controls="float-dock-panel"
           aria-expanded={panelOpen}
         >
-          <span className="float-dock-core-orb" aria-hidden="true">
-            <span className="float-dock-core-glow" />
-            <span className="float-dock-core-logo">
-              <img src="/app-logo-square.png" alt="" draggable={false} />
-            </span>
+          <span className="float-dock-core-logo">
+            <img src="/icon-512@2x.png" alt="" width={42} height={42} draggable={false} />
+            {todoOpenCount > 0 ? (
+              <span className="float-dock-todo-badge" aria-hidden="true">
+                {todoOpenCount > 99 ? '99+' : todoOpenCount}
+              </span>
+            ) : null}
           </span>
         </div>
       </div>

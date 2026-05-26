@@ -101,6 +101,12 @@ export function loadDailyTodos(): Record<string, DailyTodoItem[]> {
   }
 }
 
+/** 今日未完成待办条数（浮标徽标等） */
+export function countTodayOpenTodos(): number {
+  const list = loadDailyTodos()[todayISODate()] ?? [];
+  return list.filter((t) => !t.done).length;
+}
+
 function persistStore(store: Record<string, DailyTodoItem[]>): void {
   localStorage.setItem(DAILY_TODOS_STORAGE_KEY, JSON.stringify(cleanEmptyDates(store)));
 }
