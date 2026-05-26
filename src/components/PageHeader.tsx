@@ -23,7 +23,7 @@ export default function PageHeader({
   return (
     <header
       className={[
-        'page-header mb-1 md:mb-2 shrink-0',
+        'page-header mb-1 md:mb-2 shrink-0 pb-4 border-b border-[color:var(--glass-border-subtle)]',
         hasActions ? 'flex items-start justify-between gap-4' : '',
         className,
       ]

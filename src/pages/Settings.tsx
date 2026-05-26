@@ -365,14 +365,14 @@ export default function Settings() {
               <Loader2 className="h-4 w-4 animate-spin" /> 加载中…
             </div>
           ) : envError ? (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs" style={{ color: 'var(--danger)' }}>
+            <div className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-xs pkmer-glass-inset" style={{ color: 'var(--danger)', borderColor: 'color-mix(in srgb, var(--danger) 35%, transparent)' }}>
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>{envError}</span>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
               {/* Toolbar */}
-              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div className="flex items-center justify-between pb-2 border-b border-[color:var(--glass-border-subtle)]">
                 <span className="text-xs pkmer-text-muted">点击组标题展开/收起配置项</span>
                 <div className="flex gap-2">
                   <button
@@ -410,12 +410,12 @@ export default function Settings() {
                 const statusColor = configuredCount === 0 ? 'pkmer-text-muted' : configuredCount === g.keys.length ? 'text-green-600' : 'text-amber-600';
                 
                 return (
-                  <div key={g.title} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  <div key={g.title} className="border border-[color:var(--glass-border-subtle)] rounded-lg overflow-hidden pkmer-glass-inset">
                     {/* Group Header - Always Visible */}
                     <button
                       type="button"
                       onClick={() => toggleGroup(g.title)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[color:var(--glass-surface-muted)] transition-colors text-left"
                     >
                       {isExpanded ? (
                         <ChevronDown className="h-4 w-4 pkmer-text-muted shrink-0" />
@@ -439,7 +439,7 @@ export default function Settings() {
                             void testConnection(service);
                           }}
                           disabled={testingConnection !== null}
-                          className="flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] pkmer-text-secondary hover:border-gray-300 hover:pkmer-text-body disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                          className="flex items-center gap-1 rounded-md border border-[color:var(--glass-border-subtle)] px-2 py-1 text-[10px] pkmer-glass-pill pkmer-text-secondary hover:border-[color:var(--glass-border)] hover:pkmer-text-body disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                           {testingConnection ===
                           (g.title.includes('Jenkins')
@@ -485,11 +485,11 @@ export default function Settings() {
 
                     {/* Group Content - Expandable */}
                     {isExpanded && (
-                      <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/50">
+                      <div className="px-4 pb-4 pt-2 border-t border-[color:var(--glass-border-subtle)] bg-[color:var(--glass-surface-muted)]">
                         <div className="mb-3 flex items-center gap-2">
                           <div className="group relative">
                             <HelpCircle className="h-3.5 w-3.5 pkmer-text-muted cursor-help" />
-                            <div className="absolute left-0 top-full z-10 mt-1 hidden w-64 rounded-lg border border-gray-200 bg-white p-2 text-xs font-normal normal-case tracking-normal text-gray-700 shadow-lg group-hover:block">
+                            <div className="absolute left-0 top-full z-10 mt-1 hidden w-64 rounded-lg border border-[color:var(--glass-border)] p-2 text-xs font-normal normal-case tracking-normal pkmer-text-secondary shadow-lg pkmer-glass-inset group-hover:block">
                               {helpText[g.title]}
                             </div>
                           </div>
@@ -564,14 +564,14 @@ export default function Settings() {
               })}
               
               {/* Sticky Footer Action Bar */}
-              <div className="sticky bottom-0 z-10 bg-gradient-to-t from-white via-white to-transparent pt-4 pb-2 -mx-1 px-1">
+              <div className="sticky bottom-0 z-10 bg-gradient-to-t from-[color:var(--color-canvas)] via-[color:var(--color-canvas)] to-transparent pt-4 pb-2 -mx-1 px-1">
                 {envHint ? (
-                  <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-xs" style={{ color: 'var(--success)' }}>
+                  <div className="mb-3 flex items-center gap-2 rounded-lg border p-3 text-xs pkmer-glass-inset" style={{ color: 'var(--success)', borderColor: 'color-mix(in srgb, var(--success) 35%, transparent)' }}>
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     <span>{envHint}</span>
                   </div>
                 ) : null}
-                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-[color:var(--glass-border-subtle)] pkmer-card shadow-lg">
                   <div className="flex items-center gap-2 text-xs pkmer-text-muted">
                     <KeyRound className="h-3.5 w-3.5" />
                     <span>修改后记得保存</span>

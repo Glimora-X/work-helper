@@ -417,12 +417,10 @@ export default function Tasks() {
                     <button
                       type="button"
                       onClick={() => setSelectedDate(d)}
-                      className="w-full text-left rounded-xl px-3 py-2.5 text-sm transition-colors border border-transparent"
-                      style={{
-                        backgroundColor: active ? 'var(--neutral-100)' : 'transparent',
-                        borderColor: active ? 'var(--neutral-200)' : 'transparent',
-                        color: 'var(--text-primary)',
-                      }}
+                      className={`w-full text-left rounded-xl px-3 py-2.5 text-sm transition-colors pkmer-glass-pill ${
+                        active ? 'pkmer-glass-pill--active' : ''
+                      }`}
+                      style={{color: 'var(--text-primary)'}}
                     >
                       <span className="block font-medium">{d}</span>
                       <span className="text-xs mt-0.5 block" style={{color: 'var(--text-muted)'}}>
@@ -458,8 +456,7 @@ export default function Tasks() {
               <button
                 type="button"
                 aria-label="上一天"
-                className="p-2 rounded-xl border transition-colors hover:bg-neutral-50"
-                style={{borderColor: 'var(--neutral-200)'}}
+                className="p-2 rounded-xl pkmer-glass-pill transition-colors"
                 onClick={() => setSelectedDate((d) => shiftISODate(d, -1))}
               >
                 <ChevronLeft className="h-5 w-5" aria-hidden />
@@ -468,14 +465,12 @@ export default function Tasks() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="rounded-xl border px-2 py-2 text-sm bg-white"
-                style={{borderColor: 'var(--neutral-200)', color: 'var(--text-primary)'}}
+                className="rounded-xl px-2 py-2 text-sm pkmer-glass-input"
               />
               <button
                 type="button"
                 aria-label="下一天"
-                className="p-2 rounded-xl border transition-colors hover:bg-neutral-50"
-                style={{borderColor: 'var(--neutral-200)'}}
+                className="p-2 rounded-xl pkmer-glass-pill transition-colors"
                 onClick={() => setSelectedDate((d) => shiftISODate(d, 1))}
               >
                 <ChevronRight className="h-5 w-5" aria-hidden />
@@ -491,15 +486,14 @@ export default function Tasks() {
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={onNewTodoKeyDown}
                 placeholder="输入待办，回车或点击添加（输入法选字时的回车不会提交）"
-                className="flex-1 min-w-0 rounded-xl border px-4 py-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
-                style={{borderColor: 'var(--neutral-200)', color: 'var(--text-primary)'}}
+                className="flex-1 min-w-0 rounded-xl px-4 py-3 text-base pkmer-glass-input outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
                 aria-label="新待办内容"
               />
               <button
                 type="button"
                 onClick={addTodo}
-                className="inline-flex items-center gap-1.5 rounded-xl px-4 py-3 text-sm font-medium text-white shrink-0"
-                style={{backgroundColor: 'var(--accent-primary)'}}
+                className="inline-flex items-center gap-1.5 rounded-xl px-4 py-3 text-sm font-medium shrink-0"
+                style={{backgroundColor: 'var(--accent-primary)', color: 'var(--color-brand-dark)'}}
               >
                 <Plus className="h-4 w-4" aria-hidden />
                 添加
@@ -511,8 +505,8 @@ export default function Tasks() {
                   type="button"
                   disabled={autogenBusy}
                   onClick={onManualIncrementalAutogen}
-                  className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition-colors hover:bg-neutral-50 disabled:opacity-60"
-                  style={{borderColor: 'var(--neutral-200)', color: 'var(--text-secondary)'}}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm pkmer-glass-pill transition-colors disabled:opacity-60"
+                  style={{color: 'var(--text-secondary)'}}
                   title="仅补充今日尚未存在的昨日未完成与本周 Jira，不覆盖已有项"
                 >
                   {autogenBusy ? (
@@ -540,11 +534,9 @@ export default function Tasks() {
               {todos.map((t, index) => (
                 <li
                   key={t.id}
-                  className="flex items-start gap-2 sm:gap-3 rounded-xl border px-3 sm:px-4 py-3 transition-colors"
-                  style={{
-                    borderColor: 'var(--neutral-200)',
-                    backgroundColor: t.done ? 'var(--neutral-50)' : 'transparent',
-                  }}
+                  className={`flex items-start gap-2 sm:gap-3 rounded-xl px-3 sm:px-4 py-3 pkmer-todo-row ${
+                    t.done ? 'pkmer-todo-row--done' : ''
+                  }`}
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
@@ -568,7 +560,7 @@ export default function Tasks() {
                     onDragEnd={() => {
                       dragFromIndex.current = null;
                     }}
-                    className="mt-0.5 p-1 rounded-lg shrink-0 text-neutral-300 hover:text-neutral-500 hover:bg-neutral-100 cursor-grab active:cursor-grabbing touch-none"
+                    className="mt-0.5 p-1 rounded-lg shrink-0 text-[color:var(--color-ink-lighter)] hover:text-[color:var(--color-ink)] hover:bg-[color:var(--glass-surface-muted)] cursor-grab active:cursor-grabbing touch-none"
                     aria-label="拖拽排序"
                     title="拖拽调整顺序"
                   >
@@ -578,7 +570,7 @@ export default function Tasks() {
                     type="checkbox"
                     checked={t.done}
                     onChange={() => toggleTodo(t.id)}
-                    className="mt-1 h-4 w-4 rounded border-neutral-300 shrink-0"
+                    className="mt-1 h-4 w-4 rounded shrink-0 border-[color:var(--glass-border)]"
                     aria-label={t.done ? '标记为未完成' : '标记为已完成'}
                   />
                   {editingId === t.id ? (
@@ -599,13 +591,12 @@ export default function Tasks() {
                         commitEdit();
                       }}
                       onBlur={commitEdit}
-                      className="flex-1 min-w-0 rounded-lg border px-3 py-2 text-base outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
-                      style={{borderColor: 'var(--neutral-200)', color: 'var(--text-primary)'}}
+                      className="flex-1 min-w-0 rounded-lg px-3 py-2 text-base pkmer-glass-input outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
                       aria-label="编辑待办内容"
                     />
                   ) : (
                     <div
-                      className="flex-1 min-w-0 rounded-lg px-1 py-0.5 -mx-1 hover:bg-neutral-100/80 transition-colors cursor-pointer"
+                      className="flex-1 min-w-0 rounded-lg px-1 py-0.5 -mx-1 hover:bg-[color:var(--glass-surface-muted)] transition-colors cursor-pointer"
                       onClick={() => startEdit(t)}
                       title="点击修改内容"
                     >
@@ -622,7 +613,7 @@ export default function Tasks() {
                       <button
                         type="button"
                         onClick={() => startEdit(t)}
-                        className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+                        className="p-1.5 rounded-lg text-[color:var(--color-ink-lighter)] hover:text-[color:var(--color-ink)] hover:bg-[color:var(--glass-surface-muted)] transition-colors"
                         aria-label="编辑此条"
                         title="编辑"
                       >
@@ -632,7 +623,7 @@ export default function Tasks() {
                     <button
                       type="button"
                       onClick={() => removeTodo(t.id)}
-                      className="p-1.5 rounded-lg shrink-0 text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      className="p-1.5 rounded-lg shrink-0 text-[color:var(--color-ink-lighter)] hover:text-[color:var(--danger)] hover:bg-[color:color-mix(in_srgb,var(--danger)_15%,transparent)] transition-colors"
                       aria-label="删除此条"
                     >
                       <Trash2 className="h-4 w-4" />

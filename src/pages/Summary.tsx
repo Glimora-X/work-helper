@@ -567,15 +567,15 @@ export default function Summary() {
               无法访问 deploy-api（Jira 状态接口返回了非 JSON）
             </p>
             <p className="text-xs leading-relaxed">
-              开发环境默认请使用同源 <code className="font-mono px-1 rounded bg-neutral-100">/api/jira</code>（由 Vite
-              代理到本机 deploy-api，端口会读项目根 <code className="font-mono px-1 rounded bg-neutral-100">.deploy-api-port</code>
-              ）。若设置了 <code className="font-mono px-1 rounded bg-neutral-100">VITE_DEPLOY_API_BASE</code>，其中的主机与端口必须与当前运行的
-              deploy-api 一致（与 <code className="font-mono px-1 rounded bg-neutral-100">DEPLOY_API_PORT</code> 或终端日志、
-              <code className="font-mono px-1 rounded bg-neutral-100">.deploy-api-port</code> 对齐），否则会拿到 Vite/HTML 错误页。
+              开发环境默认请使用同源 <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">/api/jira</code>（由 Vite
+              代理到本机 deploy-api，端口会读项目根 <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">.deploy-api-port</code>
+              ）。若设置了 <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">VITE_DEPLOY_API_BASE</code>，其中的主机与端口必须与当前运行的
+              deploy-api 一致（与 <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">DEPLOY_API_PORT</code> 或终端日志、
+              <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">.deploy-api-port</code> 对齐），否则会拿到 Vite/HTML 错误页。
             </p>
             <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              确认 API 可通后，若仍提示缺少 Jira 变量，再在项目根 <code className="font-mono px-1 rounded bg-neutral-100">.env</code> 中配置凭据（与 MCP{' '}
-              <code className="font-mono px-1 rounded bg-neutral-100">chanjet-jira-mcp-new</code> 相同的一组即可）。
+              确认 API 可通后，若仍提示缺少 Jira 变量，再在项目根 <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">.env</code> 中配置凭据（与 MCP{' '}
+              <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">chanjet-jira-mcp-new</code> 相同的一组即可）。
             </p>
           </>
         ) : (
@@ -584,9 +584,9 @@ export default function Summary() {
               尚未配置 Jira 凭据
             </p>
             <p>
-              <code className="text-xs font-mono px-1 rounded bg-neutral-100">JENKINS_*</code> 只用于部署/自动化，<strong>不能</strong>
-              代替 Jira。请在项目根 <code className="text-xs font-mono px-1 rounded bg-neutral-100">.env</code> 中增加与 Cursor MCP{' '}
-              <code className="font-mono px-1 rounded bg-neutral-100">chanjet-jira-mcp-new</code> 相同的一套即可：
+              <code className="text-xs font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">JENKINS_*</code> 只用于部署/自动化，<strong>不能</strong>
+              代替 Jira。请在项目根 <code className="text-xs font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">.env</code> 中增加与 Cursor MCP{' '}
+              <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">chanjet-jira-mcp-new</code> 相同的一套即可：
             </p>
             <ul className="list-disc pl-5 space-y-1 text-xs leading-relaxed">
               <li>
@@ -903,7 +903,7 @@ export default function Summary() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="w-full text-left px-3 py-2 hover:bg-neutral-100 transition-colors"
+                        className="w-full text-left px-3 py-2 hover:bg-[color:var(--color-code-inline-bg)] transition-colors"
                         onClick={addToTodayFromMenu}
                       >
                         加入今日待办
@@ -911,7 +911,7 @@ export default function Summary() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="w-full text-left px-3 py-2 hover:bg-neutral-100 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                        className="w-full text-left px-3 py-2 hover:bg-[color:var(--color-code-inline-bg)] transition-colors disabled:opacity-50 inline-flex items-center gap-2"
                         disabled={Boolean(submitTestKey)}
                         onClick={() => void submitTestFromMenu()}
                       >
@@ -1087,10 +1087,10 @@ export default function Summary() {
               ) : (
                 <>
                   <p className="text-xs leading-relaxed">
-                    「设置」与项目根 <code className="font-mono px-1 rounded bg-neutral-100">.env</code>{' '}
+                    「设置」与项目根 <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">.env</code>{' '}
                     是<strong>同一套配置</strong>（设置页会写入 .env）。需同时配置{' '}
-                    <code className="font-mono px-1 rounded bg-neutral-100">MAIL_IMAP_USER</code> 与{' '}
-                    <code className="font-mono px-1 rounded bg-neutral-100">MAIL_IMAP_PASSWORD</code>
+                    <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">MAIL_IMAP_USER</code> 与{' '}
+                    <code className="font-mono px-1 rounded bg-[color:var(--color-code-inline-bg)]">MAIL_IMAP_PASSWORD</code>
                     （阿里邮箱<strong>三方客户端安全密码</strong>，不是网页登录密码）。
                   </p>
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
