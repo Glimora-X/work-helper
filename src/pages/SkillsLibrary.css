@@ -445,10 +445,14 @@
   word-break: break-word;
 }
 
+.skills-lib__intro--empty,
+.skills-lib__empty {
+  color: var(--text-guide);
+}
+
 .skills-lib__intro--empty {
   font-size: 0.78rem;
   line-height: 1.55;
-  color: var(--text-muted);
 }
 
 .skills-lib__intro-toggle {
@@ -549,11 +553,11 @@
   text-align: center;
   padding: 3rem 1rem;
   border-radius: 16px;
-  border: 2px dashed var(--border-light);
-  color: var(--text-muted);
+  border: 2px dashed var(--glass-border);
+  color: var(--text-guide);
   font-size: 0.93rem;
   line-height: 1.7;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--glass-surface-inset);
 }
 
 .skills-lib__error {

@@ -824,7 +824,7 @@ export default function Summary() {
                   <Loader2 className="w-4 h-4 animate-spin" /> 加载中…
                 </p>
               ) : openIssues.length === 0 ? (
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-sm pkmer-text-guide">
                   当前没有指派给你且未解决的工单。
                 </p>
               ) : (

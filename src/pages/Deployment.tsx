@@ -1287,8 +1287,8 @@ export default function Deployment() {
               {phase === 'idle' && (
                 <div className="flex flex-col items-center justify-center h-full text-center px-6">
                   <Box className="w-8 h-8 mb-3 pkmer-text-muted opacity-40" />
-                  <p className="text-sm pkmer-text-muted">从菜单中进入部署页后，可在此选择模板，或通过顶部输入框描述部署意图</p>
-                  <p className="text-xs pkmer-text-muted mt-1.5">"帮我先发 auth 服务再发 admin 页面"</p>
+                  <p className="text-sm pkmer-text-guide">从菜单中进入部署页后，可在此选择模板，或通过顶部输入框描述部署意图</p>
+                  <p className="text-xs pkmer-text-guide mt-1.5">"帮我先发 auth 服务再发 admin 页面"</p>
                 </div>
               )}
 

@@ -508,7 +508,7 @@ export default function Startup() {
              {/* Profile List */}
              <div className="flex-1 overflow-y-auto w-full flex flex-col gap-3 pr-2 scrollbar-hide pb-6">
                {filteredProfiles.length === 0 ? (
-                 <div className="text-[11px] pkmer-text-muted border border-[color:var(--color-hairline)] rounded-lg p-3 text-center bg-[color:var(--color-shell-bg)] shrink-0">
+                 <div className="text-[11px] pkmer-text-guide border border-[color:var(--glass-border-subtle)] rounded-lg p-3 text-center bg-[color:var(--glass-surface-inset)] shrink-0">
                    {searchQuery ? '无匹配配置' : '暂无配置文件'}
                  </div>
                ) : filteredProfiles.map(profile => (

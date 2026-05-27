@@ -153,12 +153,27 @@ export default function Automations() {
     setEditingTask(null);
   };
 
+  const getTypeIconClass = (type: AutomationTask['type']) => {
+    switch (type) {
+      case 'code':
+        return 'pkmer-automation-type-icon pkmer-automation-type-icon--code';
+      case 'report':
+        return 'pkmer-automation-type-icon pkmer-automation-type-icon--report';
+      case 'jira':
+        return 'pkmer-automation-type-icon pkmer-automation-type-icon--jira';
+      default:
+        return 'pkmer-automation-type-icon pkmer-automation-type-icon--code';
+    }
+  };
+
   const getIcon = (type: AutomationTask['type']) => {
-    switch(type) {
+    switch (type) {
       case 'code':
         return <GitBranch className="w-5 h-5 pkmer-icon-indigo" />;
-      case 'report': return <FileText className="w-5 h-5 text-purple-500" />;
-      case 'jira': return <CheckSquare className="w-5 h-5 text-amber-500" />;
+      case 'report':
+        return <FileText className="w-5 h-5 pkmer-icon-secondary" />;
+      case 'jira':
+        return <CheckSquare className="w-5 h-5" style={{ color: 'var(--color-brand-amber)' }} />;
       default:
         return <Bot className="w-5 h-5 pkmer-text-secondary" />;
     }
@@ -271,390 +286,296 @@ export default function Automations() {
   };
 
   return (
-    <div className="pkmer-page relative" style={{background: 'var(--bg-secondary)'}}>
+    <div className="pkmer-page">
       <div className="pkmer-page-inner pkmer-page-inner--wide">
-        
         <PageHeader
           icon={Bot}
           title="自动化任务"
           subtitle="设置定时触发器接管环境维护、信息整理和周报总结等繁杂流程"
           actions={
-            <div className="self-end pb-0.5">
-              <button
-                type="button"
-                onClick={() => setIsCreating(true)}
-                className="pkmer-btn pkmer-btn--accent"
-              >
-                <Plus className="w-4 h-4" /> 新建任务
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsCreating(true)}
+              className="pkmer-btn pkmer-btn--accent"
+            >
+              <Plus className="w-4 h-4" /> 新建任务
+            </button>
           }
         />
 
-        {/* Toolbar */}
-        <div className="mb-8 flex gap-4 items-center shrink-0">
-          <div className="relative w-72">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              placeholder="搜索任务名称或规则..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pkmer-input w-full pl-9 pr-4"
-            />
-          </div>
-          <div className="flex items-center gap-2 ml-auto text-sm" style={{ color: 'var(--text-secondary)' }}>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block ring-2 ring-white"></span>
-              {tasks.filter(t => t.active).length} 个运行中
+        <div className="pkmer-content-fill flex flex-col min-h-0">
+          <div className="mb-6 flex shrink-0 flex-wrap items-center gap-4">
+            <div className="relative w-full sm:w-72">
+              <Search
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 pkmer-icon-muted"
+                aria-hidden
+              />
+              <input
+                type="search"
+                placeholder="搜索任务名称或规则..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pkmer-input w-full pl-9 pr-4"
+              />
             </div>
-            <div className="w-px h-3 mx-2" style={{ background: 'var(--border-medium)' }}></div>
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>细则已保存至本机浏览器</span>
+            <div className="ml-auto flex items-center gap-2 text-sm pkmer-text-secondary">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2 w-2 rounded-full ring-2 ring-[color:var(--glass-border)]"
+                  style={{ background: 'var(--success)' }}
+                  aria-hidden
+                />
+                {tasks.filter((t) => t.active).length} 个运行中
+              </div>
+              <div className="mx-2 h-3 w-px bg-[color:var(--glass-border-subtle)]" aria-hidden />
+              <span className="text-xs pkmer-text-muted">细则已保存至本机浏览器</span>
+            </div>
           </div>
-        </div>
 
-        {/* Task Grid */}
-        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto pb-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredTasks.map(task => (
-              <div
-                key={task.id}
-                className={`flex flex-col rounded-xl p-5 transition-all duration-200 group ${!task.active ? 'opacity-60' : ''}`}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-light)',
-                  boxShadow: 'var(--shadow-card)',
-                }}
-                onMouseEnter={(e) => {
-                  if (task.active) {
-                    (e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow-hover)';
-                    (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow-card)';
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                }}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div
-                    className="p-2.5 rounded-xl inline-flex"
-                    style={{
-                      background:
-                        task.type === 'code'
-                          ? 'color-mix(in srgb, var(--color-primary-600) 10%, var(--color-shell-bg))'
-                          : task.type === 'report'
-                            ? 'color-mix(in srgb, var(--color-accent-secondary) 12%, var(--color-shell-bg))'
-                            : 'color-mix(in srgb, var(--color-accent) 12%, var(--color-shell-bg))',
-                      border: `1px solid ${
-                        task.type === 'code'
-                          ? 'color-mix(in srgb, var(--color-primary-600) 28%, transparent)'
-                          : task.type === 'report'
-                            ? 'color-mix(in srgb, var(--color-accent-secondary) 30%, transparent)'
-                            : 'color-mix(in srgb, var(--color-accent) 30%, transparent)'
-                      }`,
-                    }}
-                  >
-                    {getIcon(task.type)}
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className="p-1 rounded-lg transition-colors"
-                      style={{ color: task.active ? 'var(--accent-primary)' : 'var(--border-medium)' }}
-                      title={task.active ? '暂停任务' : '恢复任务'}
-                    >
-                      {task.active
-                        ? <ToggleRight className="w-6 h-6" />
-                        : <ToggleLeft className="w-6 h-6" />}
-                    </button>
-                    <button
-                      className="p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-4 flex-1">
-                  <h3
-                    className="font-semibold mb-1 text-[14px] cursor-pointer"
-                    style={{
-                      fontFamily: '"Noto Sans SC", sans-serif',
-                      color: task.active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {task.name}
-                  </h3>
-                  <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'var(--text-secondary)' }}>
-                    {task.description}
-                  </p>
-                </div>
-
-                <div className="pt-3 shrink-0" style={{ borderTop: '1px solid var(--border-light)' }}>
-                  <div
-                    className="flex items-center text-[11px] font-mono mb-3"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    <Clock className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                    {displaySchedule(task, taskEdits)}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => openWorkflowEditor(task)}
-                      className="flex items-center text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors"
-                      style={{
-                        color: task.active ? 'var(--text-secondary)' : 'var(--text-muted)',
-                        background: 'var(--bg-secondary)',
-                        border: '1px solid var(--border-light)',
-                      }}
-                    >
-                      配置工作流细则
-                    </button>
-                    {task.active && (
+          <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto pb-4">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {filteredTasks.map((task) => (
+                <article
+                  key={task.id}
+                  className={`pkmer-card group flex flex-col p-5 ${!task.active ? 'opacity-60' : ''}`}
+                >
+                  <div className="mb-3 flex items-start justify-between">
+                    <div className={getTypeIconClass(task.type)}>{getIcon(task.type)}</div>
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => startTaskRun(task)}
-                        disabled={runningTaskId !== null}
-                        className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                        style={{
-                          color: '#059669',
-                          background: 'rgba(5,150,105,0.08)',
-                          border: '1px solid rgba(5,150,105,0.2)',
-                        }}
+                        type="button"
+                        onClick={() => toggleTask(task.id)}
+                        className="rounded-lg p-1 transition-colors"
+                        style={{ color: task.active ? 'var(--accent-primary)' : 'var(--text-muted)' }}
+                        title={task.active ? '暂停任务' : '恢复任务'}
                       >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>{runningTaskId === task.id ? '执行中...' : task.nextRun}</span>
+                        {task.active ? (
+                          <ToggleRight className="h-6 w-6" />
+                        ) : (
+                          <ToggleLeft className="h-6 w-6" />
+                        )}
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        className="rounded-lg p-1 opacity-0 transition-colors group-hover:opacity-100 pkmer-icon-muted"
+                        aria-label="更多操作"
+                      >
+                        <MoreVertical className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
 
-            {/* Add New Card */}
-            <div
-              onClick={() => setIsCreating(true)}
-              className="flex flex-col items-center justify-center rounded-xl p-6 transition-all cursor-pointer min-h-[220px]"
-              style={{
-                background: 'transparent',
-                border: '2px dashed var(--border-medium)',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'var(--accent-light)';
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'transparent';
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-medium)';
-              }}
-            >
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center mb-3"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', color: 'var(--accent-primary)' }}
+                  <div className="mb-4 flex-1">
+                    <h3
+                      className={`mb-1 text-sm font-semibold pkmer-text-body ${task.active ? '' : 'pkmer-text-secondary'}`}
+                    >
+                      {task.name}
+                    </h3>
+                    <p className="line-clamp-3 text-xs leading-relaxed pkmer-text-secondary">
+                      {task.description}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0 border-t border-[color:var(--glass-border-subtle)] pt-3">
+                    <div className="mb-3 flex items-center font-mono text-[11px] pkmer-text-muted">
+                      <Clock className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {displaySchedule(task, taskEdits)}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openWorkflowEditor(task)}
+                        className="pkmer-glass-pill pkmer-glass-pill--secondary px-2.5 py-1.5 text-xs font-medium"
+                      >
+                        配置工作流细则
+                      </button>
+                      {task.active ? (
+                        <button
+                          type="button"
+                          onClick={() => startTaskRun(task)}
+                          disabled={runningTaskId !== null}
+                          className="pkmer-btn-run"
+                        >
+                          <Play className="h-3 w-3 fill-current" aria-hidden />
+                          <span>{runningTaskId === task.id ? '执行中...' : task.nextRun}</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setIsCreating(true)}
+                className="pkmer-card pkmer-card--dashed flex min-h-[220px] flex-col items-center justify-center p-6"
               >
-                <Plus className="w-5 h-5" />
-              </div>
-              <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>添加定制自动化</span>
-              <span className="text-xs mt-1 max-w-[200px] text-center" style={{ color: 'var(--text-muted)' }}>
-                输入自然语言立刻生成结构化定时计划。
-              </span>
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--glass-border)] bg-[color:var(--glass-surface-elevated)] text-[color:var(--accent-primary)]">
+                  <Plus className="h-5 w-5" aria-hidden />
+                </div>
+                <span className="text-sm font-medium pkmer-text-secondary">添加定制自动化</span>
+                <span className="mt-1 max-w-[200px] text-xs pkmer-text-guide">
+                  输入自然语言立刻生成结构化定时计划。
+                </span>
+              </button>
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* Editing Modal Overlay */}
-      {editingTask && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm p-6 overflow-hidden" style={{ background: 'rgba(45,49,66,0.55)' }}>
-          <div className="rounded-2xl shadow-2xl w-full max-w-2xl max-h-full flex flex-col animate-in fade-in zoom-in-95 duration-200" style={{ background: 'var(--bg-card)' }}>
-            <div className="flex items-center justify-between p-6" style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg" style={{ background: 'var(--accent-light)', border: '1px solid color-mix(in srgb, var(--color-primary-600) 25%, transparent)', color: 'var(--accent-primary)' }}>
-                  <Zap className="w-5 h-5" />
+      {editingTask ? (
+        <div className="pkmer-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="workflow-modal-title">
+          <div className="pkmer-modal pkmer-modal--wide">
+            <div className="pkmer-modal__head">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={getTypeIconClass(editingTask.type)}>
+                  <Zap className="h-5 w-5" style={{ color: 'var(--accent-primary)' }} aria-hidden />
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold" style={{ fontFamily: '"Noto Sans SC", sans-serif', color: 'var(--text-primary)' }}>配置工作流</h2>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{editingTask.name}</p>
+                <div className="min-w-0">
+                  <h2 id="workflow-modal-title" className="text-lg font-semibold pkmer-text-body truncate">
+                    配置工作流
+                  </h2>
+                  <p className="mt-0.5 text-xs pkmer-text-muted truncate">{editingTask.name}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setEditingTask(null)}
-                className="p-2 rounded-xl transition-colors"
-                style={{ color: 'var(--text-muted)' }}
+                className="rounded-xl p-2 pkmer-glass-pill"
+                aria-label="关闭"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)', fontFamily: '"Noto Sans SC", sans-serif' }}>
-                    执行频率 (Cron)
-                  </label>
-                  <input
-                    type="text"
-                    value={draftSchedule}
-                    onChange={(e) => setDraftSchedule(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg text-sm focus:outline-none transition-all"
-                    style={{
-                      background: 'var(--bg-secondary)',
-                      border: '1px solid var(--border-light)',
-                      color: 'var(--text-primary)',
-                    }}
-                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--focus-ring-shadow)'; }}
-                    onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)', fontFamily: '"Noto Sans SC", sans-serif' }}>
-                    执行节点脚本
-                  </label>
-                  <textarea
-                    value={draftScript}
-                    onChange={(e) => setDraftScript(e.target.value)}
-                    spellCheck={false}
-                    rows={14}
-                    className="w-full rounded-lg p-4 text-sm font-mono focus:outline-none resize-y min-h-[200px]"
-                    style={{
-                      background: 'var(--color-code-bg)',
-                      border: '1px solid var(--color-code-tabs)',
-                      color: 'var(--color-code-text)',
-                    }}
-                  />
-                  <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>保存后写入本机；实际定时仍以服务端 / 环境变量为准。</p>
-                </div>
+            <div className="pkmer-modal__body space-y-6">
+              <div>
+                <label className="pkmer-field-label mb-2 block">执行频率 (Cron)</label>
+                <input
+                  type="text"
+                  value={draftSchedule}
+                  onChange={(e) => setDraftSchedule(e.target.value)}
+                  className="pkmer-input-line w-full"
+                />
+              </div>
+              <div>
+                <label className="pkmer-field-label mb-2 block">执行节点脚本</label>
+                <textarea
+                  value={draftScript}
+                  onChange={(e) => setDraftScript(e.target.value)}
+                  spellCheck={false}
+                  rows={14}
+                  className="pkmer-terminal__body w-full min-h-[200px] resize-y rounded-lg border border-[color:var(--color-code-tabs)]"
+                />
+                <p className="mt-2 text-xs pkmer-text-muted">
+                  保存后写入本机；实际定时仍以服务端 / 环境变量为准。
+                </p>
               </div>
             </div>
 
-            <div className="p-4 flex justify-end gap-3 rounded-b-2xl" style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg-secondary)' }}>
-              <button
-                onClick={() => setEditingTask(null)}
-                className="px-5 py-2 text-sm font-medium rounded-lg transition-colors"
-                style={{ color: 'var(--text-secondary)' }}
-              >
+            <div className="pkmer-modal__foot">
+              <button type="button" onClick={() => setEditingTask(null)} className="pkmer-btn pkmer-btn--outline">
                 取消
               </button>
-              <button
-                onClick={handleSaveWorkflowConfig}
-                className="px-5 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm"
-                style={{ background: 'var(--accent-primary)' }}
-              >
+              <button type="button" onClick={handleSaveWorkflowConfig} className="pkmer-btn pkmer-btn--accent">
                 保存配置
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Creating / Prompt Generation Modal Overlay */}
-      {isCreating && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm p-6 overflow-hidden" style={{ background: 'rgba(45,49,66,0.55)' }}>
-          <div className="rounded-2xl shadow-2xl w-full max-w-xl flex flex-col animate-in fade-in zoom-in-95 duration-200" style={{ background: 'var(--bg-card)' }}>
-            <div className="flex items-center justify-between p-6 pb-4">
+      {isCreating ? (
+        <div className="pkmer-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+          <div className="pkmer-modal">
+            <div className="pkmer-modal__head">
               <div className="flex items-center gap-2.5">
-                <Sparkles className="w-5 h-5" style={{ color: '#f59e0b' }} />
-                <h2 className="text-lg font-semibold" style={{ fontFamily: '"Noto Sans SC", sans-serif', color: 'var(--text-primary)' }}>
+                <Sparkles className="h-5 w-5" style={{ color: 'var(--color-brand-amber)' }} aria-hidden />
+                <h2 id="create-modal-title" className="text-lg font-semibold pkmer-text-body">
                   通过对话创建新任务
                 </h2>
               </div>
               <button
+                type="button"
                 onClick={() => setIsCreating(false)}
-                className="p-2 rounded-xl transition-colors"
-                style={{ color: 'var(--text-muted)' }}
+                className="rounded-xl p-2 pkmer-glass-pill"
+                aria-label="关闭"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6 pt-0">
-              <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                向 AI Dottie-Assistant描述您希望自动执行的任务、触发的时间和需要连接到的数据源，系统会立刻为您编排。
+            <div className="pkmer-modal__body">
+              <p className="mb-4 text-sm pkmer-text-secondary">
+                向 AI Dottie-Assistant 描述您希望自动执行的任务、触发的时间和需要连接到的数据源，系统会立刻为您编排。
               </p>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="例如：每天下班前，检索我关联的所有 Git commits 记录生成一份极简日志发送到我的企业微信..."
-                className="w-full rounded-xl p-4 text-sm focus:outline-none resize-none h-32 transition-all"
-                style={{
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-light)',
-                  color: 'var(--text-primary)',
-                }}
-                onFocus={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-primary)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = 'var(--focus-ring-shadow)';
-                }}
-                onBlur={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-light)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
-                }}
+                className="pkmer-glass-input h-32 w-full resize-none p-4 text-sm"
               />
             </div>
 
-            <div className="p-4 flex justify-end gap-3" style={{ borderTop: '1px solid var(--border-light)' }}>
-              <button
-                onClick={() => setIsCreating(false)}
-                className="px-5 py-2 text-sm font-medium rounded-lg transition-colors"
-                style={{ color: 'var(--text-secondary)' }}
-              >
+            <div className="pkmer-modal__foot">
+              <button type="button" onClick={() => setIsCreating(false)} className="pkmer-btn pkmer-btn--outline">
                 取消
               </button>
               <button
+                type="button"
                 onClick={handleCreateSubmit}
                 disabled={!prompt.trim()}
-                className="px-5 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm cursor-pointer disabled:opacity-50"
-                style={{ background: 'var(--accent-primary)' }}
+                className="pkmer-btn pkmer-btn--accent disabled:opacity-50"
               >
                 生成结构化计划
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {terminalOpen && (
-        <div className="absolute inset-0 z-40 flex items-end justify-center bg-gray-900/25 p-6">
-          <div className="w-full max-w-4xl bg-[#111111] border border-[#2A2A2A] rounded-2xl overflow-hidden shadow-2xl">
-            <div className="h-11 bg-[#1e1e1e] border-b border-[#2A2A2A] px-4 flex items-center justify-between">
-              <span className="text-xs font-mono text-gray-300">automation@assistant - live terminal</span>
-              <button onClick={() => setTerminalOpen(false)} className="text-gray-400 hover:text-white">
-                <X className="w-4 h-4" />
+      {terminalOpen ? (
+        <div className="pkmer-modal-overlay z-40 items-end justify-center pb-6 pt-24">
+          <div className="pkmer-terminal w-full max-w-4xl max-h-[min(420px,70vh)]">
+            <div className="pkmer-terminal__chrome">
+              <p className="text-xs font-mono">automation@assistant — live</p>
+              <button
+                type="button"
+                onClick={() => setTerminalOpen(false)}
+                className="rounded-lg p-1 pkmer-text-muted hover:text-[color:var(--color-ink)]"
+                aria-label="关闭终端"
+              >
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="max-h-[320px] overflow-y-auto p-4 font-mono text-xs text-gray-300 space-y-1">
+            <div className="pkmer-terminal__body max-h-[320px] space-y-1">
               {terminalLogs.length === 0 ? (
-                <div className="text-gray-500">Waiting for execution logs...</div>
+                <div className="pkmer-text-muted">Waiting for execution logs...</div>
               ) : (
                 terminalLogs.map((line, idx) => <div key={idx}>{line}</div>)
               )}
             </div>
-            {isWaitingInput && (
-              <div className="border-t border-[#2A2A2A] p-4 bg-[#161616]">
-                <p className="text-xs text-yellow-300 mb-2">检测到异常需你介入：{manualHint}</p>
+            {isWaitingInput ? (
+              <div className="border-t border-[color:var(--color-code-tabs)] bg-[color:var(--color-code-tabs)] p-4">
+                <p className="mb-2 text-xs" style={{ color: 'var(--warning)' }}>
+                  检测到异常需你介入：{manualHint}
+                </p>
                 <div className="flex gap-2">
                   <input
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
                     placeholder="输入处理命令，例如 git merge --continue"
-                    className="flex-1 px-3 py-2 rounded-lg bg-[#0f0f0f] border border-[#333] text-xs text-gray-200 focus:outline-none"
+                    className="pkmer-input-line flex-1 font-mono text-xs"
                   />
-                  <button
-                    onClick={submitManualSolution}
-                    className="px-3 py-2 text-xs bg-blue-600 hover:bg-blue-700 rounded-lg text-white"
-                  >
+                  <button type="button" onClick={submitManualSolution} className="pkmer-btn pkmer-btn--accent shrink-0 text-xs">
                     继续执行
                   </button>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
-      )}
-
+      ) : null}
     </div>
   );
 }

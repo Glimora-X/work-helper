@@ -294,7 +294,7 @@ export default function Settings() {
             <>
               <div className="flex flex-col gap-2">
                 {catalog.length === 0 ? (
-                  <p className="text-xs pkmer-text-muted">暂无登记，点击下方添加一行。</p>
+                  <p className="text-xs pkmer-text-guide">暂无登记，点击下方添加一行。</p>
                 ) : (
                   catalog.map((row) => (
                     <div key={row.id} className="pkmer-stack-row pkmer-stack-row--catalog">

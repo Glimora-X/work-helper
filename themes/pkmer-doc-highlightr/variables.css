@@ -1,150 +1,221 @@
 /**
- * 助手应用主题 token — 深蓝底 + 荧光绿/粉强调 + 玻璃态
- * 参考色：#2d4dbd / #456ef5 / #d4f04d / #f567c1
+ * 助手应用主题 token — 晴空系 · 双模
+ * 设计原则：
+ *   1. 原始色唯一来源，语义 token 全部 var() 引用
+ *   2. 亮色模式：白底 + 冷雾蓝面板 + 单一蓝强调
+ *   3. 暗色模式：深墨蓝底 + 固态分层 + 蓝强调 / 荧光绿仅用于 CTA
+ *   4. 四层表面（L0→L3）明度差 ≥ 6%，层次无歧义
+ *   5. 正文对比度 ≥ 7:1，次要文字 ≥ 4.5:1，辅助文字 ≥ 3:1
  */
+
+/* ─────────────────────────────────────────
+   原始色（唯一 hex / hsl 来源）
+───────────────────────────────────────── */
 :root {
-  /* ── 品牌色 ── */
-  --color-brand-blue: #2d4dbd;
-  --color-brand-blue-ui: #456ef5;
-  --color-brand-lime: #d4f04d;
-  --color-brand-pink: #f567c1;
-  --color-brand-dark: #1e1e1e;
+  --raw-blue-50:  #EEF3FF;
+  --raw-blue-100: #D8E4FF;
+  --raw-blue-200: #B3C9FF;
+  --raw-blue-400: #5B8AF7;
+  --raw-blue-500: #3A6EF5;   /* 主强调 */
+  --raw-blue-600: #2754D9;
+  --raw-blue-800: #1A3580;
+  --raw-blue-900: #0E1E4A;
 
-  /* ── 文档 / 页面语义色 ── */
-  --color-canvas: #6b8fe8;
-  --color-canvas-gradient-end: #5a7fd6;
-  --color-ink: #ffffff;
-  --color-ink-light: rgba(255, 255, 255, 0.82);
-  --color-ink-lighter: rgba(255, 255, 255, 0.62);
-  --color-accent: #d4f04d;
-  --color-accent-secondary: #f567c1;
-  --color-hairline: rgba(255, 255, 255, 0.12);
-  --color-surface-hover: rgba(255, 255, 255, 0.08);
-  --color-surface-offset: rgba(255, 255, 255, 0.1);
-  --color-code-bg: #1e1e1e;
-  --color-code-tabs: #2a2a2a;
-  --color-code-text: rgba(255, 255, 255, 0.9);
-  --color-code-inline-bg: rgba(255, 255, 255, 0.12);
-  --color-selection-bg: rgba(212, 240, 77, 0.2);
-  --gradient-doc-bg: linear-gradient(
-    180deg,
-    var(--color-canvas) 0%,
-    var(--color-canvas-gradient-end) 100%
-  );
+  --raw-teal-400: #2DC8A8;   /* 成功 / 运行中 */
+  --raw-teal-500: #1FAF92;
 
-  /* Glassmorphism — 亮蓝底上的半透明白（与背景拉开对比） */
-  --glass-blur: 20px;
-  --glass-blur-strong: 28px;
-  --glass-surface: rgba(255, 255, 255, 0.2);
-  --glass-surface-elevated: rgba(255, 255, 255, 0.28);
-  --glass-surface-muted: rgba(255, 255, 255, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.38);
-  --glass-border-subtle: rgba(255, 255, 255, 0.22);
-  --glass-highlight: rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 8px 32px rgba(45, 77, 189, 0.18), 0 2px 8px rgba(45, 77, 189, 0.1);
-  --glass-shadow-elevated: 0 16px 48px rgba(45, 77, 189, 0.22), 0 4px 12px rgba(45, 77, 189, 0.12);
-  --ambient-gradient: radial-gradient(
-      ellipse 55% 45% at 8% 12%,
-      rgba(212, 240, 77, 0.35) 0%,
-      transparent 55%
-    ),
-    radial-gradient(
-      ellipse 50% 40% at 92% 88%,
-      rgba(245, 103, 193, 0.28) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse 65% 55% at 85% 15%,
-      rgba(255, 255, 255, 0.25) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse 55% 45% at 15% 85%,
-      rgba(69, 110, 245, 0.2) 0%,
-      transparent 50%
-    ),
-    linear-gradient(165deg, #8fadf0 0%, #6b8fe8 38%, #5a7fd6 72%, #4d75d8 100%);
-  --radius-glass: 1.25rem;
-  --radius-glass-lg: 1.5rem;
-  --radius-glass-xl: 1.75rem;
+  --raw-lime-400: #AADF3C;   /* CTA 主操作按钮（仅此一处） */
+  --raw-lime-600: #7DB82A;
 
-  --color-mark-light: rgba(212, 240, 77, 0.45);
-  --color-mark-dark: rgba(245, 103, 193, 0.5);
+  --raw-pink-400: #F567C1;   /* 保留品牌粉，仅用于标记/徽章 */
 
-  --color-search-hit: #456ef5;
-  --color-search-hit-bg: rgba(69, 110, 245, 0.35);
-  --color-search-mark-bg: rgba(212, 240, 77, 0.4);
+  --raw-amber-400: #FFC170;
+  --raw-amber-600: #D4892A;
 
-  /* ── 导航 / 外壳 ── */
-  --color-primary-500: #456ef5;
-  --color-primary-600: #3a5fe0;
-  --color-muted-400: rgba(255, 255, 255, 0.5);
-  --color-muted-500: rgba(255, 255, 255, 0.45);
-  --color-muted-700: rgba(255, 255, 255, 0.72);
-  --color-muted-800: #1e1e1e;
-  --color-shell-bg: rgba(255, 255, 255, 0.08);
-
-  --color-brand-amber: #d4f04d;
-  --color-brand-amber-deep: #b8d63f;
-  --color-brand-slate: rgba(255, 255, 255, 0.55);
-
-  --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
-    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  --font-mono: "IBM Plex Mono", Consolas, "Andale Mono WT", "Andale Mono", "Lucida Console",
-    "Lucida Sans Typewriter", "DejaVu Sans Mono", "Bitstream Vera Sans Mono", "Liberation Mono",
-    "Nimbus Mono L", Monaco, "Courier New", Courier, monospace;
-  --text-doc-base: 1rem;
-  --text-doc-sm: 0.9375rem;
-  --text-doc-xs: 0.875rem;
-  --leading-body: 1.5;
-  --tracking-nav-wordmark: 0.1em;
-
-  --spacing-inline-min: 1rem;
-  --spacing-doc-block: 0.5rem;
-  --spacing-4: 4px;
-  --spacing-8: 8px;
-  --spacing-12: 12px;
-  --spacing-16: 16px;
-  --spacing-24: 24px;
-  --spacing-32: 32px;
-
-  --radius-md: 0.375rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1.25rem;
-  --radius-pill: 9999px;
-  --radius-mark-y: 0.6em;
-  --radius-mark-x: 0.3em;
-
-  --shadow-nav-scrolled: 0 10px 15px -3px rgba(0, 0, 0, 0.35),
-    0 4px 6px -4px rgba(0, 0, 0, 0.25);
-  --shadow-megamenu: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+  --raw-neutral-0:   #FFFFFF;
+  --raw-neutral-50:  #F4F6FA;
+  --raw-neutral-100: #E8ECF4;
+  --raw-neutral-200: #D0D6E8;
+  --raw-neutral-400: #8892B0;
+  --raw-neutral-600: #4A5478;
+  --raw-neutral-800: #1C2340;
+  --raw-neutral-900: #316eb6;
+  --raw-neutral-950: #080C1A;
 }
 
+/* ─────────────────────────────────────────
+   亮色模式（默认）
+───────────────────────────────────────── */
+:root {
+  /* 品牌语义别名 */
+  --color-brand-blue:      var(--raw-blue-500);
+  --color-brand-blue-ui:   var(--raw-blue-400);
+  --color-brand-teal:      var(--raw-teal-500);
+  --color-brand-lime:      var(--raw-lime-400);
+  --color-brand-pink:      var(--raw-pink-400);
+  --color-brand-amber:     var(--raw-amber-400);
+  --color-brand-amber-deep:var(--raw-amber-600);
+
+  /* ── 表面四层 ──
+     L0 页面背景 → L1 面板 → L2 卡片 → L3 输入框 / 控件
+  */
+  --color-bg-page:      var(--raw-neutral-50);     /* #F4F6FA — 底层 */
+  --color-bg-panel:     var(--raw-neutral-0);      /* #FFFFFF — 侧边栏/主面板 */
+  --color-bg-card:      var(--raw-blue-50);        /* #EEF3FF — 列表卡片 */
+  --color-bg-card-hover:#E4EAFF;
+  --color-bg-card-active:color-mix(in srgb, var(--raw-blue-500) 10%, var(--raw-neutral-0));
+  --color-bg-input:     var(--raw-neutral-0);      /* 输入框纯白 */
+  --color-bg-code:      var(--raw-neutral-900);    /* 终端/代码块 */
+  --color-bg-tag:       var(--raw-blue-100);
+
+  /* 文字三级 */
+  --color-ink:         var(--raw-neutral-900);     /* 主文字 #0D1226  ≥7:1 on white */
+  --color-ink-light:   var(--raw-neutral-600);     /* 次要   #4A5478  ≥4.5:1 */
+  --color-ink-muted:   var(--raw-neutral-400);     /* 辅助   #8892B0  ≥3:1 */
+  --color-ink-guide:   var(--raw-neutral-400);     /* 空白态引导文案 */
+  --color-ink-on-dark: var(--raw-neutral-0);       /* 深色面板上的文字 */
+  --color-ink-on-accent: var(--raw-neutral-900);   /* lime 按钮上的文字 */
+
+  /* 强调色 */
+  --color-accent:          var(--raw-blue-500);    /* 链接/选中/聚焦 */
+  --color-accent-hover:    var(--raw-blue-600);
+  --color-accent-secondary:var(--raw-teal-500);    /* 成功/运行 */
+  --color-cta:             var(--raw-lime-400);    /* 主操作按钮唯一用处 */
+  --color-cta-hover:       var(--raw-lime-600);
+
+  /* 边框 */
+  --color-border:       var(--raw-neutral-200);    /* 默认线  #D0D6E8 */
+  --color-border-light: var(--raw-neutral-100);    /* 细分割线 */
+  --color-border-focus: var(--raw-blue-500);
+  --color-border-card-active: var(--raw-blue-400);
+  --color-border-tag:   var(--raw-blue-200);
+
+  /* 文字标记 */
+  --color-mark-light: color-mix(in srgb, var(--raw-lime-400) 30%, transparent);
+  --color-mark-dark:  color-mix(in srgb, var(--raw-pink-400) 25%, transparent);
+
+  /* Tag 文字色 */
+  --color-tag-text:   var(--raw-blue-600);
+
+  /* 代码块 */
+  --color-code-bg:      var(--raw-neutral-800);
+  --color-code-tabs:    var(--raw-neutral-800);
+  --color-code-text:    rgba(255,255,255,0.92);
+  --color-code-inline-bg: var(--raw-blue-50);
+
+  /* 搜索命中 */
+  --color-search-hit:    var(--raw-blue-500);
+  --color-search-hit-bg: var(--raw-blue-100);
+  --color-search-mark-bg:color-mix(in srgb, var(--raw-lime-400) 35%, transparent);
+
+  /* 选区 */
+  --color-selection-bg: color-mix(in srgb, var(--raw-blue-400) 20%, transparent);
+
+  /* 渐变（页面背景用） */
+  --gradient-doc-bg: linear-gradient(
+    160deg,
+    var(--raw-neutral-50) 0%,
+    color-mix(in srgb, var(--raw-blue-50) 60%, var(--raw-neutral-50)) 100%
+  );
+
+  /* 阴影（无玻璃模糊，改用分层实色阴影） */
+  --shadow-card:    0 1px 3px rgba(14,30,74,0.06), 0 1px 2px rgba(14,30,74,0.04);
+  --shadow-panel:   0 4px 16px rgba(14,30,74,0.08), 0 1px 4px rgba(14,30,74,0.04);
+  --shadow-elevated:0 8px 24px rgba(14,30,74,0.10), 0 2px 6px rgba(14,30,74,0.06);
+  --shadow-nav-scrolled: 0 2px 8px rgba(14,30,74,0.08);
+
+  /* 圆角 */
+  --radius-sm:  0.25rem;   /* 4px  — tag/badge */
+  --radius-md:  0.5rem;    /* 8px  — 按钮/输入框 */
+  --radius-lg:  0.75rem;   /* 12px — 卡片 */
+  --radius-xl:  1rem;      /* 16px — 面板/大卡片 */
+  --radius-2xl: 1.25rem;   /* 20px — 底部 nav */
+  --radius-pill:9999px;
+
+  /* 字体 */
+  --font-body: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,
+               sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+  --font-mono: "IBM Plex Mono",Consolas,"Andale Mono WT","Andale Mono","Lucida Console",
+               "Lucida Sans Typewriter","DejaVu Sans Mono","Bitstream Vera Sans Mono",
+               "Liberation Mono","Nimbus Mono L",Monaco,"Courier New",Courier,monospace;
+
+  /* 间距 */
+  --spacing-4: 4px; --spacing-8: 8px; --spacing-12: 12px;
+  --spacing-16:16px;--spacing-24:24px;--spacing-32:32px;
+
+  /* 文字尺寸 */
+  --text-doc-base:1rem; --text-doc-sm:0.9375rem; --text-doc-xs:0.875rem;
+  --leading-body:1.5; --tracking-nav-wordmark:0.08em;
+}
+
+/* ─────────────────────────────────────────
+   暗色模式（.theme-dark）
+   底层深墨蓝 + 固态分层 + 统一蓝强调
+───────────────────────────────────────── */
 .theme-dark {
-  --color-canvas: #1a2560;
-  --color-canvas-gradient-end: #141c48;
-  --glass-surface: rgba(255, 255, 255, 0.08);
-  --glass-surface-elevated: rgba(255, 255, 255, 0.11);
-  --glass-surface-muted: rgba(255, 255, 255, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.14);
-  --glass-border-subtle: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.18);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-  --glass-shadow-elevated: 0 20px 56px rgba(0, 0, 0, 0.55);
-  --ambient-gradient: radial-gradient(
-      ellipse 55% 45% at 8% 12%,
-      rgba(212, 240, 77, 0.15) 0%,
-      transparent 55%
-    ),
-    radial-gradient(
-      ellipse 50% 40% at 92% 88%,
-      rgba(245, 103, 193, 0.12) 0%,
-      transparent 50%
-    ),
-    linear-gradient(165deg, #1a2560 0%, #141c48 100%);
-  --color-shell-bg: rgba(255, 255, 255, 0.05);
-  --shadow-nav-scrolled: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
-    0 4px 6px -4px rgba(0, 0, 0, 0.4);
-  --shadow-megamenu: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  /* 表面四层（明度差约 8%/层，清晰可辨） */
+  --color-bg-page:       var(--raw-neutral-950);   /* #080C1A — 最底 */
+  --color-bg-panel:      var(--raw-neutral-900);   /* #0D1226 — 侧栏/主面板 */
+  --color-bg-card:       var(--raw-neutral-800);   /* #1C2340 — 卡片 */
+  --color-bg-card-hover: #232B50;
+  --color-bg-card-active:color-mix(in srgb, var(--raw-blue-500) 16%, var(--raw-neutral-800));
+  --color-bg-input:      #141829;                  /* 输入框比卡片稍深 */
+  --color-bg-code:       #0A0E1C;
+  --color-bg-tag:        color-mix(in srgb, var(--raw-blue-500) 18%, var(--raw-neutral-800));
+
+  /* 文字（全部基于白色透明度，确保各层复用） */
+  --color-ink:        #316eb6;      /* ≥7:1 on L1-L3 */
+  --color-ink-light:  rgba(255,255,255,0.68);      /* ≥4.5:1 */
+  --color-ink-muted:  rgba(255,255,255,0.42);      /* ≥3:1 */
+  --color-ink-guide:  rgba(255,255,255,0.50);      /* 空白态 — 比 muted 略亮 */
+  --color-ink-on-dark:rgba(255,255,255,0.95);
+  --color-ink-on-accent: var(--raw-neutral-900);
+
+  /* 强调色（暗色下蓝色略亮，保对比） */
+  --color-accent:          var(--raw-blue-400);    /* #5B8AF7 */
+  --color-accent-hover:    var(--raw-blue-500);
+  --color-accent-secondary:var(--raw-teal-400);
+  --color-cta:             var(--raw-lime-400);
+  --color-cta-hover:       color-mix(in srgb, var(--raw-lime-400) 85%, white);
+
+  /* 边框（纯白透明度，浮于任何深色表面） */
+  --color-border:       rgba(255,255,255,0.10);
+  --color-border-light: rgba(255,255,255,0.06);
+  --color-border-focus: var(--raw-blue-400);
+  --color-border-card-active: var(--raw-blue-400);
+  --color-border-tag:   color-mix(in srgb, var(--raw-blue-400) 40%, transparent);
+
+  /* Tag */
+  --color-tag-text:     var(--raw-blue-200);
+
+  /* 代码块 */
+  --color-code-bg:      var(--color-bg-code);
+  --color-code-tabs:    #131726;
+  --color-code-text:    rgba(255,255,255,0.90);
+  --color-code-inline-bg:color-mix(in srgb, var(--raw-blue-400) 15%, transparent);
+
+  /* 搜索命中 */
+  --color-search-hit:    var(--raw-blue-400);
+  --color-search-hit-bg: color-mix(in srgb, var(--raw-blue-400) 20%, transparent);
+  --color-search-mark-bg:color-mix(in srgb, var(--raw-lime-400) 25%, transparent);
+
+  /* 选区 */
+  --color-selection-bg:  color-mix(in srgb, var(--raw-blue-400) 25%, transparent);
+
+  /* 标记 */
+  --color-mark-light: color-mix(in srgb, var(--raw-lime-400) 28%, transparent);
+  --color-mark-dark:  color-mix(in srgb, var(--raw-pink-400) 35%, transparent);
+
+  /* 渐变（极简，不抢占内容视线） */
+  --gradient-doc-bg: linear-gradient(
+    160deg,
+    var(--raw-neutral-950) 0%,
+    color-mix(in srgb, var(--raw-blue-900) 40%, var(--raw-neutral-950)) 100%
+  );
+
+  /* 阴影（暗色下用黑色，无蓝色染色） */
+  --shadow-card:    0 1px 3px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.20);
+  --shadow-panel:   0 4px 16px rgba(0,0,0,0.40), 0 1px 4px rgba(0,0,0,0.25);
+  --shadow-elevated:0 8px 24px rgba(0,0,0,0.50), 0 2px 6px rgba(0,0,0,0.30);
+  --shadow-nav-scrolled: 0 2px 8px rgba(0,0,0,0.40);
 }

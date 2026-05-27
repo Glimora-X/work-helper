@@ -403,7 +403,7 @@ export default function Tasks() {
             <span className="text-sm font-medium">以往记录</span>
           </div>
           {historyDates.length === 0 ? (
-            <p className="text-sm leading-relaxed" style={{color: 'var(--text-muted)'}}>
+            <p className="text-sm leading-relaxed pkmer-text-guide">
               添加任务后会按日期出现在这里
             </p>
           ) : (
@@ -505,8 +505,7 @@ export default function Tasks() {
                   type="button"
                   disabled={autogenBusy}
                   onClick={onManualIncrementalAutogen}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm pkmer-glass-pill transition-colors disabled:opacity-60"
-                  style={{color: 'var(--text-secondary)'}}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm pkmer-glass-pill pkmer-glass-pill--secondary transition-colors disabled:opacity-60"
                   title="仅补充今日尚未存在的昨日未完成与本周 Jira，不覆盖已有项"
                 >
                   {autogenBusy ? (
@@ -526,7 +525,7 @@ export default function Tasks() {
           </div>
 
           {todos.length === 0 ? (
-            <p className="py-16 text-center text-base" style={{color: 'var(--text-muted)'}}>
+            <p className="py-16 text-center pkmer-empty-state">
               这一天还没有待办，在上方输入并添加即可
             </p>
           ) : (
