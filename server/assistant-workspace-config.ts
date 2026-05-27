@@ -1,33 +1,57 @@
+import { config as loadDotenv } from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { moduleDirname } from './module-dirname';
+import { resolveRepoConfigPath, resolveUserDataConfigPath } from './assistant-data-paths';
+
+function resolveAssistantDotenvPath(): string | null {
+  const assistant = process.env.ASSISTANT_DOTENV_PATH?.trim();
+  if (!assistant) return null;
+  const abs = path.resolve(assistant);
+  return fs.existsSync(abs) ? abs : null;
+}
+
+function resolveExplicitDeployDotenvPath(): string | null {
+  const explicit = process.env.DEPLOY_API_DOTENV?.trim();
+  if (!explicit) return null;
+  const abs = path.resolve(explicit);
+  return fs.existsSync(abs) ? abs : null;
+}
 
 /**
  * 与 deploy-api 启动时一致：解析要加载的 `.env` 路径（第一个存在的文件）。
+ * 桌面包：Electron 设置 ASSISTANT_DOTENV_PATH 时优先读用户数据目录，避免只配在项目根却不生效。
  */
 export function resolveDeployApiDotenvPath(): string | null {
-  const explicit = process.env.DEPLOY_API_DOTENV?.trim();
-  if (explicit) {
-    const abs = path.resolve(explicit);
-    if (fs.existsSync(abs)) return abs;
-  }
+  const assistant = resolveAssistantDotenvPath();
+  if (assistant) return assistant;
+  const explicit = resolveExplicitDeployDotenvPath();
+  if (explicit) return explicit;
   const repoStyle = path.join(moduleDirname(), '..', '.env');
   if (fs.existsSync(repoStyle)) return path.resolve(repoStyle);
   const besideApi = path.join(moduleDirname(), '.env');
   if (fs.existsSync(besideApi)) return path.resolve(besideApi);
-  const assistant = process.env.ASSISTANT_DOTENV_PATH?.trim();
-  if (assistant) {
-    const absA = path.resolve(assistant);
-    if (fs.existsSync(absA)) return absA;
-  }
   return null;
 }
 
-/** 写入目标：已有 .env 则同路径；否则在仓库根创建 `.env` */
+/** 写入目标：桌面包已设 ASSISTANT_DOTENV_PATH 时始终落用户数据目录；否则沿用已存在的 .env 路径 */
 export function resolveWritableDotenvPath(): string {
+  const assistant = process.env.ASSISTANT_DOTENV_PATH?.trim();
+  if (assistant) return path.resolve(assistant);
   const found = resolveDeployApiDotenvPath();
   if (found) return found;
+  const explicit = process.env.DEPLOY_API_DOTENV?.trim();
+  if (explicit) return path.resolve(explicit);
   return path.resolve(moduleDirname(), '..', '.env');
+}
+
+/** 启动或设置页保存后：从 resolveDeployApiDotenvPath 指向的文件加载进 process.env */
+export function reloadDeployApiDotenv(options?: { override?: boolean }): string | null {
+  const envPath = resolveDeployApiDotenvPath();
+  if (envPath) {
+    loadDotenv({ path: envPath, override: options?.override ?? false });
+  }
+  return envPath;
 }
 
 export type ProjectCatalogEntry = {
@@ -48,7 +72,11 @@ function repoRoot(): string {
 }
 
 export function projectCatalogPath(): string {
-  return path.join(repoRoot(), 'config', 'assistant-project-catalog.json');
+  const override = process.env.ASSISTANT_PROJECT_CATALOG_PATH?.trim();
+  if (override) return path.resolve(override);
+  const userData = resolveUserDataConfigPath('assistant-project-catalog.json');
+  if (userData) return userData;
+  return resolveRepoConfigPath('assistant-project-catalog.json');
 }
 
 export function loadProjectCatalog(): ProjectCatalogEntry[] {

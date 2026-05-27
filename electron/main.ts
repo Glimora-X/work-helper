@@ -207,7 +207,9 @@ async function startBundledApi(): Promise<void> {
     };
 
     // utilityProcess.fork 在打包后无需 RunAsNode fuse，是 Electron 22+ 推荐的子进程方案
-    const assistantDotenvPath = path.join(app.getPath('userData'), '.env');
+    const userDataDir = app.getPath('userData');
+    const assistantDotenvPath = path.join(userDataDir, '.env');
+    const userConfigDir = path.join(userDataDir, 'config');
     const homeDir = process.env.HOME || os.homedir();
     const defaultPath =
       '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
@@ -224,6 +226,9 @@ async function startBundledApi(): Promise<void> {
         DEPLOY_API_PORT: String(API_PORT),
         /** deploy-api 在桌面包内会优先读仓库式 .env，不存在时再读此路径（与项目根 .env 二选一即可） */
         ASSISTANT_DOTENV_PATH: assistantDotenvPath,
+        MAIL_SUBSCRIPTIONS_PATH: path.join(userConfigDir, 'mail-subscriptions.json'),
+        MAIL_DIGEST_STORE_PATH: path.join(userDataDir, 'data', 'mail-digest', 'latest.json'),
+        ASSISTANT_PROJECT_CATALOG_PATH: path.join(userConfigDir, 'assistant-project-catalog.json'),
       },
       cwd: path.resolve(root),
       stdio: 'pipe',

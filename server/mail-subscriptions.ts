@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { moduleDirname } from './module-dirname';
+import {
+  resolveBundledConfigDir,
+  resolveRepoConfigPath,
+  resolveUserDataConfigPath,
+  seedUserConfigFromBundle,
+} from './assistant-data-paths';
 
 export type MailSubscription = {
   id: string;
@@ -15,14 +20,14 @@ export type MailSubscriptionsFile = {
   subscriptions: MailSubscription[];
 };
 
-function repoRoot(): string {
-  return path.resolve(moduleDirname(), '..');
-}
-
 export function mailSubscriptionsPath(): string {
   const override = process.env.MAIL_SUBSCRIPTIONS_PATH?.trim();
   if (override) return path.resolve(override);
-  return path.join(repoRoot(), 'config', 'mail-subscriptions.json');
+  const userData = resolveUserDataConfigPath('mail-subscriptions.json');
+  if (userData) return userData;
+  const bundled = resolveBundledConfigDir();
+  if (bundled) return path.join(bundled, 'mail-subscriptions.json');
+  return resolveRepoConfigPath('mail-subscriptions.json');
 }
 
 function isValidSubscription(raw: unknown): raw is MailSubscription {
@@ -76,14 +81,17 @@ export function validateMailSubscriptionsFile(data: unknown): MailSubscriptionsF
 
 export function loadMailSubscriptions(): MailSubscriptionsFile {
   const p = mailSubscriptionsPath();
+  const userWritable = resolveUserDataConfigPath('mail-subscriptions.json');
+  if (userWritable && path.resolve(p) === path.resolve(userWritable)) {
+    seedUserConfigFromBundle('mail-subscriptions.json', userWritable);
+  }
+  let raw: string;
   try {
-    const raw = fs.readFileSync(p, 'utf8');
-    return validateMailSubscriptionsFile(JSON.parse(raw));
-  } catch (e) {
-    if (e instanceof Error && e.message.startsWith('version')) throw e;
-    if (e instanceof Error && e.message.includes('subscriptions')) throw e;
+    raw = fs.readFileSync(p, 'utf8');
+  } catch {
     return { version: 1, subscriptions: [] };
   }
+  return validateMailSubscriptionsFile(JSON.parse(raw));
 }
 
 export function saveMailSubscriptions(data: MailSubscriptionsFile): void {

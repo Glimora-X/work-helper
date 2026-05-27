@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { moduleDirname } from './module-dirname';
+import { resolveUserDataDataPath } from './assistant-data-paths';
 
 export type MailDigestStats = {
   total: number;
@@ -23,6 +24,8 @@ function repoRoot(): string {
 export function mailDigestStorePath(): string {
   const override = process.env.MAIL_DIGEST_STORE_PATH?.trim();
   if (override) return path.resolve(override);
+  const userData = resolveUserDataDataPath('mail-digest', 'latest.json');
+  if (userData) return userData;
   return path.join(repoRoot(), 'data', 'mail-digest', 'latest.json');
 }
 

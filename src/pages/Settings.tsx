@@ -222,13 +222,22 @@ export default function Settings() {
   };
 
   const saveEnv = async () => {
-    // Validate before saving
+    const hasSecret = (key: string) =>
+      Boolean(secretConfigured[key]) && !clearSecrets[key];
+    const hasPlain = (key: string) => Boolean(plainValues[key]?.trim());
+
     const errors: Record<string, string> = {};
-    if (plainValues['JENKINS_USER'] && !plainValues['JENKINS_TOKEN']) {
+    if (hasPlain('JENKINS_USER') && !hasPlain('JENKINS_TOKEN') && !hasSecret('JENKINS_TOKEN')) {
       errors['JENKINS_TOKEN'] = 'Jenkins Token 是必需的';
     }
-    if (plainValues['JIRA_SERVER_URL'] && !plainValues['JIRA_USERNAME'] && !plainValues['JIRA_API_TOKEN']) {
-      errors['JIRA_API_TOKEN'] = 'Jira API Token 或用户名是必需的';
+    if (
+      hasPlain('JIRA_SERVER_URL') &&
+      !hasPlain('JIRA_USERNAME') &&
+      !hasPlain('JIRA_API_TOKEN') &&
+      !hasSecret('JIRA_API_TOKEN') &&
+      !hasSecret('JIRA_PASSWORD')
+    ) {
+      errors['JIRA_API_TOKEN'] = 'Jira API Token、密码或用户名至少配置一项';
     }
     
     if (Object.keys(errors).length > 0) {

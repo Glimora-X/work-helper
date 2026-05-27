@@ -1,5 +1,4 @@
 import express from 'express';
-import { config } from 'dotenv';
 import { triggerJenkinsJob, pollBuildUntilComplete } from './jenkins-client';
 import { resolveIssueToJobPaths } from './jira-resolve';
 import { resolveJiraAuth, jiraSearch, jiraSubmitTestTransition } from './jira-rest';
@@ -58,6 +57,7 @@ import {
   parseEnvValues,
   projectCatalogPath,
   readEnvFileIfExists,
+  reloadDeployApiDotenv,
   resolveDeployApiDotenvPath,
   resolveWritableDotenvPath,
   saveProjectCatalog,
@@ -75,13 +75,11 @@ import {
   validateMailSubscriptionsFile,
 } from './mail-subscriptions';
 
-const envPath = resolveDeployApiDotenvPath();
-if (envPath) {
-  config({ path: envPath });
-} else if (!process.env.JIRA_SERVER_URL?.trim()) {
+const envPath = reloadDeployApiDotenv();
+if (!envPath && !process.env.JIRA_SERVER_URL?.trim()) {
   console.warn(
-    '[deploy-api] 未找到 .env 文件（已尝试 DEPLOY_API_DOTENV、<api 上一级>/.env、<api 同目录>/.env、ASSISTANT_DOTENV_PATH）。' +
-      'Jira 等变量将仅来自当前进程环境；桌面包请将含 JIRA_* 的 .env 放到用户数据目录，或设置 DEPLOY_API_DOTENV。',
+    '[deploy-api] 未找到 .env 文件（已尝试 ASSISTANT_DOTENV_PATH、DEPLOY_API_DOTENV、<api 上一级>/.env、<api 同目录>/.env）。' +
+      'Jira 等变量将仅来自当前进程环境；桌面包请将含 JIRA_* / MAIL_IMAP_* 的 .env 放到用户数据目录，或设置 DEPLOY_API_DOTENV。',
   );
 }
 
@@ -1054,8 +1052,7 @@ app.get('/api/assistant/env-ui', (_req, res) => {
       if (isSecretEnvKey(k)) {
         fields[k] = { kind: 'secret', configured: Boolean(v.trim()) };
       } else {
-        const plainValue = v || MAIL_ENV_DEFAULTS[k] || '';
-        fields[k] = { kind: 'plain', value: plainValue };
+        fields[k] = { kind: 'plain', value: v || '' };
       }
     }
     res.json({
@@ -1100,10 +1097,11 @@ app.post('/api/assistant/env-ui', (req, res) => {
     const previous = readEnvFileIfExists(writePath) ?? '';
     const merged = mergeEnvFileContent(previous, updates, removeFiltered);
     writeEnvFile(writePath, merged);
+    reloadDeployApiDotenv({ override: true });
     res.json({
       ok: true,
       dotenvWritePath: writePath,
-      hint: '已写入磁盘。正在运行的 deploy-api 仍使用旧环境变量，请重启 npm run dev / deploy-api 后生效。',
+      hint: '已写入磁盘并已重新加载环境变量。若邮件或 Jira 仍异常，请完全退出 Dottie-Assistant 后重试。',
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

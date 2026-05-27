@@ -4,6 +4,8 @@ import {
   ChevronRight,
   ExternalLink,
   GripVertical,
+  Lightbulb,
+  ListTodo,
   Loader2,
   Pencil,
   Plus,
@@ -14,6 +16,15 @@ import {type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo,
 import PageHeader from '../components/PageHeader';
 import {deployApiUrl} from '../lib/deploy-api-url';
 import {
+  addBrainstormItem,
+  formatBrainstormTime,
+  loadBrainstormItems,
+  removeBrainstormItem,
+  updateBrainstormItem,
+  type BrainstormItem,
+} from '../lib/brainstorm-storage';
+import {
+  addPlainTextTodoToToday,
   appendJiraIssuesToToday,
   carryYesterdayIncompleteToToday,
   DAILY_TODOS_STORAGE_KEY,
@@ -56,6 +67,8 @@ function todosDoneLast<T extends {done: boolean}>(list: T[]): T[] {
 type JiraStatusPayload = {configured?: boolean; serverUrl?: string};
 
 type IncrementalAutogenResult = {carried: number; jira: number};
+
+type TasksView = 'daily' | 'brainstorm';
 
 function normalizeStoreFromDisk(): Record<string, TodoItem[]> {
   const raw = loadDailyTodos();
@@ -165,17 +178,39 @@ function TodoItemBody({
 }
 
 export default function Tasks() {
+  const [view, setView] = useState<TasksView>('daily');
   const [store, setStore] = useState<Record<string, TodoItem[]>>({});
   const [selectedDate, setSelectedDate] = useState(todayISODate);
   const [draft, setDraft] = useState('');
+  const [brainstormItems, setBrainstormItems] = useState<BrainstormItem[]>([]);
+  const [brainstormDraft, setBrainstormDraft] = useState('');
+  const [brainstormHint, setBrainstormHint] = useState<string | null>(null);
+  const [brainstormEditingId, setBrainstormEditingId] = useState<string | null>(null);
+  const [brainstormEditDraft, setBrainstormEditDraft] = useState('');
   const [hydrated, setHydrated] = useState(false);
   const [jiraServerUrl, setJiraServerUrl] = useState<string | undefined>();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const dragFromIndex = useRef<number | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const brainstormInputRef = useRef<HTMLTextAreaElement>(null);
+  const brainstormEditRef = useRef<HTMLTextAreaElement>(null);
   const [autogenBusy, setAutogenBusy] = useState(false);
   const [autogenHint, setAutogenHint] = useState<string | null>(null);
+
+  const refreshBrainstorm = useCallback(() => {
+    setBrainstormItems(loadBrainstormItems());
+  }, []);
+
+  useEffect(() => {
+    refreshBrainstorm();
+  }, [refreshBrainstorm]);
+
+  useEffect(() => {
+    if (!brainstormHint) return;
+    const t = window.setTimeout(() => setBrainstormHint(null), 3500);
+    return () => window.clearTimeout(t);
+  }, [brainstormHint]);
 
   useEffect(() => {
     const raw = loadDailyTodos();
@@ -266,6 +301,13 @@ export default function Tasks() {
       editInputRef.current.select();
     }
   }, [editingId]);
+
+  useEffect(() => {
+    if (brainstormEditingId && brainstormEditRef.current) {
+      brainstormEditRef.current.focus();
+      brainstormEditRef.current.select();
+    }
+  }, [brainstormEditingId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -384,6 +426,67 @@ export default function Tasks() {
     addTodo();
   };
 
+  const addBrainstorm = () => {
+    const result = addBrainstormItem(brainstormDraft);
+    if (result.added) {
+      setBrainstormDraft('');
+      refreshBrainstorm();
+      setBrainstormHint('已记下这条灵感');
+      return;
+    }
+    if (result.reason === 'duplicate') setBrainstormHint('已有相同内容，未重复添加');
+  };
+
+  const onBrainstormKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    if (e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    addBrainstorm();
+  };
+
+  const startBrainstormEdit = (item: BrainstormItem) => {
+    setBrainstormEditingId(item.id);
+    setBrainstormEditDraft(item.text);
+  };
+
+  const cancelBrainstormEdit = () => {
+    setBrainstormEditingId(null);
+    setBrainstormEditDraft('');
+  };
+
+  const commitBrainstormEdit = () => {
+    if (!brainstormEditingId) return;
+    const text = brainstormEditDraft.trim();
+    if (!text) {
+      cancelBrainstormEdit();
+      return;
+    }
+    if (!updateBrainstormItem(brainstormEditingId, text)) {
+      setBrainstormHint('内容为空或与其他条目重复');
+      return;
+    }
+    refreshBrainstorm();
+    cancelBrainstormEdit();
+  };
+
+  const promoteBrainstormToToday = (text: string) => {
+    const result = addPlainTextTodoToToday(text);
+    if (result.added) {
+      const raw = loadDailyTodos();
+      const normalized: Record<string, TodoItem[]> = {};
+      for (const [k, list] of Object.entries(raw)) {
+        if (Array.isArray(list) && list.length > 0) normalized[k] = todosDoneLast(list);
+      }
+      setStore(normalized);
+      setView('daily');
+      setSelectedDate(todayISODate());
+      setBrainstormHint('已加入今日待办');
+      return;
+    }
+    if (result.reason === 'duplicate') setBrainstormHint('今日待办里已有相同内容');
+    else setBrainstormHint('内容为空，未加入待办');
+  };
+
   const isToday = selectedDate === todayISODate();
 
   return (
@@ -391,10 +494,174 @@ export default function Tasks() {
       <div className="pkmer-page-inner pkmer-page-inner--wide">
         <PageHeader
           title="每日待办"
-          subtitle="按日期记录任务，数据保存在本机浏览器"
+          subtitle={
+            view === 'daily'
+              ? '按日期记录任务，数据保存在本机浏览器'
+              : '随手记下灵光乍现的想法与需求，可一键转为今日待办'
+          }
         />
 
+        <div
+          className="mb-6 flex shrink-0 flex-wrap gap-2"
+          role="tablist"
+          aria-label="待办视图"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'daily'}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors pkmer-glass-pill ${
+              view === 'daily' ? 'pkmer-glass-pill--active' : ''
+            }`}
+            onClick={() => setView('daily')}
+          >
+            <ListTodo className="h-4 w-4 shrink-0" aria-hidden />
+            每日待办
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'brainstorm'}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors pkmer-glass-pill ${
+              view === 'brainstorm' ? 'pkmer-glass-pill--active' : ''
+            }`}
+            onClick={() => setView('brainstorm')}
+          >
+            <Lightbulb className="h-4 w-4 shrink-0" aria-hidden />
+            头脑风暴
+            {brainstormItems.length > 0 ? (
+              <span className="text-xs font-mono opacity-80">({brainstormItems.length})</span>
+            ) : null}
+          </button>
+        </div>
+
         <div className="pkmer-content-fill">
+          {view === 'brainstorm' ? (
+            <section className="pkmer-card flex min-h-0 flex-1 flex-col p-5 md:p-8">
+              <div className="mb-4 shrink-0">
+                <p className="text-base font-medium" style={{color: 'var(--text-primary)'}}>
+                  灵光速记
+                </p>
+                <p className="mt-1 text-sm pkmer-text-guide">
+                  不必整理成正式待办；想到什么就写什么。Enter 保存，Shift+Enter 换行。
+                </p>
+              </div>
+
+              <div className="mb-6 flex shrink-0 flex-col gap-2">
+                <textarea
+                  ref={brainstormInputRef}
+                  value={brainstormDraft}
+                  onChange={(e) => setBrainstormDraft(e.target.value)}
+                  onKeyDown={onBrainstormKeyDown}
+                  rows={3}
+                  placeholder="例如：部署页增加环境对比、总结页支持导出 PDF…"
+                  className="w-full min-h-[5.5rem] resize-y rounded-xl px-4 py-3 text-base pkmer-glass-input outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--color-primary-600)_30%,transparent)]"
+                  aria-label="头脑风暴内容"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={addBrainstorm}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium shrink-0"
+                    style={{backgroundColor: 'var(--color-cta)', color: 'var(--color-ink-on-accent)'}}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                    记下灵感
+                  </button>
+                  {brainstormHint ? (
+                    <span className="text-sm pkmer-text-muted" role="status">
+                      {brainstormHint}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {brainstormItems.length === 0 ? (
+                <p className="py-16 text-center pkmer-empty-state">
+                  还没有记录；上方输入后点「记下灵感」或按 Enter
+                </p>
+              ) : (
+                <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                  {brainstormItems.map((item) => (
+                    <li
+                      key={item.id}
+                      className="rounded-xl border border-[color:var(--color-border-light)] bg-[color:var(--color-bg-card)] px-4 py-3"
+                    >
+                      {brainstormEditingId === item.id ? (
+                        <div className="flex flex-col gap-2">
+                          <textarea
+                            ref={brainstormEditRef}
+                            value={brainstormEditDraft}
+                            onChange={(e) => setBrainstormEditDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelBrainstormEdit();
+                                return;
+                              }
+                              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                                e.preventDefault();
+                                commitBrainstormEdit();
+                              }
+                            }}
+                            onBlur={commitBrainstormEdit}
+                            rows={3}
+                            className="w-full resize-y rounded-lg px-3 py-2 text-base pkmer-glass-input outline-none"
+                            aria-label="编辑灵感"
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <p
+                            className="text-base leading-relaxed whitespace-pre-wrap break-words cursor-pointer"
+                            style={{color: 'var(--text-primary)'}}
+                            onClick={() => startBrainstormEdit(item)}
+                            title="点击编辑"
+                          >
+                            {item.text}
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <time
+                              className="text-xs pkmer-text-muted mr-auto"
+                              dateTime={new Date(item.createdAt).toISOString()}
+                            >
+                              {formatBrainstormTime(item.createdAt)}
+                            </time>
+                            <button
+                              type="button"
+                              onClick={() => promoteBrainstormToToday(item.text)}
+                              className="rounded-lg px-2.5 py-1 text-xs font-medium pkmer-glass-pill pkmer-glass-pill--secondary"
+                            >
+                              加入今日待办
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startBrainstormEdit(item)}
+                              className="p-1.5 rounded-lg text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink)] hover:bg-[color:var(--color-bg-card-hover)]"
+                              aria-label="编辑"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                removeBrainstormItem(item.id);
+                                refreshBrainstorm();
+                              }}
+                              className="p-1.5 rounded-lg text-[color:var(--color-ink-muted)] hover:text-[color:var(--danger)] hover:bg-[color:color-mix(in_srgb,var(--danger)_15%,transparent)]"
+                              aria-label="删除"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : (
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,220px)_1fr] lg:items-stretch">
         {/* 历史日期 */}
         <aside className="pkmer-card flex max-h-[min(50vh,24rem)] min-h-0 flex-col p-4 md:p-5 lg:max-h-none">
@@ -634,6 +901,7 @@ export default function Tasks() {
           )}
         </section>
           </div>
+          )}
         </div>
       </div>
     </div>

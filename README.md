@@ -84,6 +84,16 @@
 
 **习惯用法**：日常调试用 `npm run dist:dir`；对外发安装包用 `npm run dist`。
 
+### 桌面包与环境变量
+
+打包后的应用 **不会** 自动读取开发机「项目根 `.env`」。deploy-api 按以下顺序查找配置文件：
+
+1. `ASSISTANT_DOTENV_PATH`（Electron 默认：`~/Library/Application Support/Dottie-Assistant/.env`）
+2. `DEPLOY_API_DOTENV`（若设置）
+3. 开发态项目根 `.env`
+
+**阿里企业邮箱**（总结页「未读邮件」）需在上述生效路径中配置 `MAIL_IMAP_USER` 与 `MAIL_IMAP_PASSWORD`（阿里邮箱 **三方客户端安全密码**）。可在应用内 **设置 → Jenkins / Jira / Wiki（.env）** 填写并「合并写入」；展开「路径详情」可确认读写路径。保存后服务端会热加载；若仍提示未配置，请完全退出应用后重开。
+
 ## 其它
 
 - 更细的环境变量说明（Jira 前缀、代理、桌面包 `.env` 路径等）见 [.env.example](.env.example)。
