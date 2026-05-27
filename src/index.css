@@ -1464,9 +1464,7 @@ mark {
 
 .pkmer-glass-pill {
   background: var(--color-bg-input);
-  border: 1px solid var(--color-border);
   color: var(--text-primary);
-  box-shadow: var(--glass-shadow-inset);
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
